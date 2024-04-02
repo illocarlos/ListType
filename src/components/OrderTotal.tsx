@@ -17,7 +17,7 @@ const OrderTotal = ({ order }: TotalProps) => {
 
     return (
         <div>
-            <h1>Total aprox: <span>{formatCurrency(total)}</span></h1>
+            <h1>Total: <span className=" text-emerald-900 font-extrabold text-lg">{formatCurrency(total)}/</span>aprox</h1>
         </div>
     )
 }

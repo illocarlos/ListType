@@ -82,7 +82,7 @@ function App() {
           <div
             className={` ${show ? "block" : "hidden"}`}
           >
-            <div className="grid gap-y-5 grid-cols-4 my-5 mx-6">
+            <div className="grid gap-y-5 grid-cols-2 my-5 mx-6">
 
               {itemCategories.map(item => (
                 <ButtonComponent
