@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react"
-
+// base de dato interna en la misma aplicacion donde recogemos un array de objeto
 import { listItems } from "./data/db"
+// hook donde nos traemos el array relleno con los datos 
 import useList from "./hooks/useList"
+
+// archivo importante para diferenciar de typescript en el creamos objetos que vamos a utilizar 
+//en bastantes lugares de la aplicacion pues los centralizamos en un archivo 
 import type { listItem } from "./types/types"
 // component
 import ListItem from "./components/ListItem"
@@ -82,7 +86,7 @@ function App() {
           <div
             className={` ${show ? "block" : "hidden"}`}
           >
-            <div className="grid gap-y-5 grid-cols-2 my-5 mx-6">
+            <div className="grid gap-y-5 grid-cols-2 my-5 ">
 
               {itemCategories.map(item => (
                 <ButtonComponent
