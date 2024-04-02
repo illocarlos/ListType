@@ -114,7 +114,7 @@ function App() {
           </div>
         </div>
         <div
-          className="border border-dashed border-slate-900 p-5 rounded-md space-y-10 md:border-none"
+          className="border border-dashed border-slate-900 p-5 rounded-md space-y-10 md:border-none overflow-y-auto max-h-96"
         >
           <ListOrder
             order={order}
