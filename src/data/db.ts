@@ -192,7 +192,7 @@ export const listItems: listItem[] = [
         "price": 40
     }, {
         "id": 31,
-        "name": "choclate",
+        "name": "chocolate",
         "type": "dulces",
         "price": 40
     }, {
@@ -397,12 +397,12 @@ export const listItems: listItem[] = [
         "type": "limpieza/cocina",
         "price": 40
     }, {
-        "id": 5,
+        "id": 66,
         "name": "fresas",
         "type": "frutas",
         "price": 15
     }, {
-        "id": 5,
+        "id": 67,
         "name": "sandia",
         "type": "frutas",
         "price": 15
