@@ -80,13 +80,13 @@ function App() {
             </button>
             <h2
               className=" ml-3 uppercase font-extrabold text-4xl mb-9"
-            >Productos</h2>
+            > Filtro</h2>
           </div>
 
           <div
             className={` ${show ? "block" : "hidden"}`}
           >
-            <div className="grid gap-y-5 grid-cols-2 my-5 ">
+            <div className="grid gap-y-6 py-5 grid-cols-2 my-5 border-2 border-y-zinc-300 md:border-0 ">
 
               {itemCategories.map(item => (
                 <ButtonComponent
@@ -97,9 +97,11 @@ function App() {
               ))
               }
 
-
             </div>
 
+            <h2
+              className=" ml-3 uppercase font-extrabold text-center text-xl mb-9"
+            > Productos</h2>
             <div className="grid grid-cols-2">
               {filteredItems.map(item => (
                 <ListItem
@@ -112,7 +114,7 @@ function App() {
           </div>
         </div>
         <div
-          className="border border-dashed border-slate-900 p-5 rounded-md space-y-10"
+          className="border border-dashed border-slate-900 p-5 rounded-md space-y-10 md:border-none"
         >
           <ListOrder
             order={order}
