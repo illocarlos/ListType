@@ -65,7 +65,7 @@ export const listItems: listItem[] = [
     {
         "id": 11,
         "name": "huevos",
-        "type": "carnes",
+        "type": "huevos",
         "price": 20
     },
     {
@@ -98,7 +98,7 @@ export const listItems: listItem[] = [
     ,
     {
         "id": 16,
-        "name": "hilo de dientes",
+        "name": "hilo dental",
         "type": "aseo",
         "price": 40
     }
@@ -111,7 +111,7 @@ export const listItems: listItem[] = [
     },
     {
         "id": 18,
-        "name": "arroz",
+        "name": "arroz integral",
         "type": "pastas",
         "price": 40
     }
@@ -120,21 +120,22 @@ export const listItems: listItem[] = [
     {
         "id": 19,
         "name": "vinage de limpieza",
-        "type": "limpieza",
+        "type": "limpieza/cocina",
         "price": 40
-    }
-    ,
+    },
+
+
     {
         "id": 20,
         "name": "lejia",
-        "type": "limpieza",
+        "type": "limpieza/cocina",
         "price": 40
     }
     ,
     {
         "id": 21,
         "name": "suavizante",
-        "type": "limpieza",
+        "type": "limpieza/cocina",
         "price": 40
     },
     {
@@ -178,5 +179,224 @@ export const listItems: listItem[] = [
         "name": "garbanzos",
         "type": "legumbres",
         "price": 40
-    }
+    },
+    {
+        "id": 29,
+        "name": "mistol",
+        "type": "limpieza/cocina",
+        "price": 40
+    }, {
+        "id": 30,
+        "name": "piña",
+        "type": "fruta",
+        "price": 40
+    }, {
+        "id": 31,
+        "name": "choclate",
+        "type": "dulces",
+        "price": 40
+    }, {
+        "id": 32,
+        "name": "cerveza",
+        "type": "bebida",
+        "price": 40
+    }, {
+        "id": 33,
+        "name": "cocacole",
+        "type": "bebida",
+        "price": 40
+    }, {
+        "id": 34,
+        "name": "fanta",
+        "type": "bebida",
+        "price": 40
+    }, {
+        "id": 35,
+        "name": "tonica",
+        "type": "bebida",
+        "price": 40
+    },
+    {
+        "id": 36,
+        "name": "shampoo",
+        "type": "aseo",
+        "price": 40
+    },
+    {
+        "id": 37,
+        "name": "papel higenico",
+        "type": "aseo",
+        "price": 40
+    },
+    {
+        "id": 38,
+        "name": "papel cocina",
+        "type": "limpieza/cocina",
+        "price": 40
+    }, {
+        "id": 39,
+        "name": "detergente",
+        "type": "limpieza/cocina",
+        "price": 40
+    },
+    {
+        "id": 40,
+        "name": "patatas",
+        "type": "vegetales",
+        "price": 40
+    }, {
+        "id": 41,
+        "name": "zanahoria",
+        "type": "vegetales",
+        "price": 40
+    },
+    {
+        "id": 42,
+        "name": "yogurt",
+        "type": "lacteos",
+        "price": 40
+    },
+    {
+        "id": 43,
+        "name": "yogurt liquido",
+        "type": "lacteos",
+        "price": 40
+    },
+    {
+        "id": 44,
+        "name": "te verde",
+        "type": "te",
+        "price": 40
+    },
+    {
+        "id": 45,
+        "name": "chocolate blanco",
+        "type": "dulce",
+        "price": 40
+    },
+    {
+        "id": 46,
+        "name": "donuts",
+        "type": "dulce",
+        "price": 40
+    },
+
+    {
+        "id": 47,
+        "name": "galletas",
+        "type": "dulce",
+        "price": 40
+    },
+
+    {
+        "id": 48,
+        "name": "leche",
+        "type": "lacteo",
+        "price": 40
+    },
+    {
+        "id": 49,
+        "name": "compresas",
+        "type": "aseo",
+        "price": 40
+    },
+
+    {
+        "id": 50,
+        "name": "cuchillas",
+        "type": "aseo",
+        "price": 40
+    },
+    {
+        "id": 51,
+        "name": "salchichon",
+        "type": "embutido",
+        "price": 40
+    },
+    {
+        "id": 52,
+        "name": "chorizo",
+        "type": "embutido",
+        "price": 40
+    },
+    {
+        "id": 53,
+        "name": "queso curado",
+        "type": "lacteo",
+        "price": 40
+    },
+    {
+        "id": 54,
+        "name": "fuet",
+        "type": "embutido",
+        "price": 40
+    },
+    {
+        "id": 55,
+        "name": "salchichon",
+        "type": "embutido",
+        "price": 40
+    },
+    {
+        "id": 56,
+        "name": "calabacin",
+        "type": "vegetales",
+        "price": 40
+    },
+    {
+        "id": 57,
+        "name": "calabaza",
+        "type": "vegetales",
+        "price": 40
+    },
+    {
+        "id": 58,
+        "name": "nugget",
+        "type": "congelados",
+        "price": 40
+    },
+    {
+        "id": 59,
+        "name": "helados",
+        "type": "congelados",
+        "price": 40
+    },
+    {
+        "id": 60,
+        "name": "croquetas",
+        "type": "congelados",
+        "price": 40
+    },
+    {
+        "id": 61,
+        "name": "lentejas",
+        "type": "legumbres",
+        "price": 40
+    },
+    {
+        "id": 62,
+        "name": "chicharos",
+        "type": "legumbres",
+        "price": 40
+    },
+    {
+        "id": 63,
+        "name": "cepillo de diente",
+        "type": "aseo",
+        "price": 40
+    },
+    {
+        "id": 64,
+        "name": "fregona/cubo",
+        "type": "limpieza/cocina",
+        "price": 40
+    },
+    {
+        "id": 65,
+        "name": "escoba/recogedor",
+        "type": "limpieza/cocina",
+        "price": 40
+    },
+
+
 ]
