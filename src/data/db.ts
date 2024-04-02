@@ -188,7 +188,7 @@ export const listItems: listItem[] = [
     }, {
         "id": 30,
         "name": "piña",
-        "type": "fruta",
+        "type": "frutas",
         "price": 40
     }, {
         "id": 31,
@@ -202,7 +202,7 @@ export const listItems: listItem[] = [
         "price": 40
     }, {
         "id": 33,
-        "name": "cocacole",
+        "name": "cocacola",
         "type": "bebida",
         "price": 40
     }, {
@@ -333,7 +333,7 @@ export const listItems: listItem[] = [
     },
     {
         "id": 55,
-        "name": "salchichon",
+        "name": "salami",
         "type": "embutido",
         "price": 40
     },
@@ -396,6 +396,16 @@ export const listItems: listItem[] = [
         "name": "escoba/recogedor",
         "type": "limpieza/cocina",
         "price": 40
+    }, {
+        "id": 5,
+        "name": "fresas",
+        "type": "frutas",
+        "price": 15
+    }, {
+        "id": 5,
+        "name": "sandia",
+        "type": "frutas",
+        "price": 15
     },
 
 
