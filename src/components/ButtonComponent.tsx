@@ -24,7 +24,7 @@ const ButtonComponent = ({ filterFunction, type }: ListButtonProps) => {
 
     return (
         <button
-            className={`uppercase border-b-4 mx-4 border-black ${type === activeButton ? 'border-green-500 transition-all duration-700 ease-in-out' : 'transition-all duration-700 ease-in-out'}`}
+            className={`uppercase border-b-4 mx-3 border-black ${type === activeButton ? 'border-green-500 transition-all duration-700 ease-in-out' : 'transition-all duration-700 ease-in-out'}`}
             style={{ backgroundPosition: type === activeButton ? '0 100%' : '100% 100%' }}
             onClick={handleClick}
         >
