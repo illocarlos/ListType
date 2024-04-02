@@ -120,21 +120,21 @@ export const listItems: listItem[] = [
     {
         "id": 19,
         "name": "vinage de limpieza",
-        "type": "productos de limpieza",
+        "type": "limpieza",
         "price": 40
     }
     ,
     {
         "id": 20,
         "name": "lejia",
-        "type": "productos de limpieza",
+        "type": "limpieza",
         "price": 40
     }
     ,
     {
         "id": 21,
         "name": "suavizante",
-        "type": "productos de limpieza",
+        "type": "limpieza",
         "price": 40
     },
     {

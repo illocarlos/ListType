@@ -23,18 +23,20 @@ const ListOrder = ({ order, removeItem }: ListOrderProps) => {
 
                     {order.map(item => (
                         <div
-                            className="flex flex-nowrap  flex-row my-3 justify-around items-center text-start border-b-2 border-emerald-400 mx-4 "
+                            className="h-6/6 flex flex-nowrap py-8  flex-row my-3 justify-around items-center text-start border-b-2 border-emerald-400 mx-4 "
                             key={item.id}>
-                            <div>
-                                <p className="text-xl font-bold uppercase"> {item.name} </p>
+                            <div className="h-6/6">
+                                <p className="text-XL font-bold uppercase"> {item.name} X{item.quantity} </p>
                                 <div className="flex flex-row">
-                                    <p className="text-xs font-bold">unidades:{item.quantity}</p>
+                                    <p className="text-xs font-bold">unidades:{item.quantity} </p>
                                     <p className=" ml-5 text-xs font-extraligth"> total:{formatCurrency(item.price * item.quantity)}</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => removeItem(item.id)}
-                                className="bg-red-600 px-6 h-5/6 text-white font-extrabold rounded-full">X</button>
+                                className="bg-red-600 w-10 h-10 text-white font-extrabold rounded-full">
+                                X
+                            </button>
                         </div>
                     ))}
                 </div>
