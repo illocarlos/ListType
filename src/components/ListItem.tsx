@@ -20,7 +20,7 @@ const ListItem = ({ item, addItem }: ListItemProps) => {
             "
             onClick={() => addItem(item)}
         >
-            <div className=" flex flex-row  justify-between items-center mx-2 ">
+            <div className=" flex flex-row  justify-between items-center ">
 
                 <h1 className="text-lg font-extrabold  uppercase"> {item.name}</h1>
                 <p className="text-2xl font-extrabold">+</p>
