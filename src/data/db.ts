@@ -387,13 +387,13 @@ export const listItems: listItem[] = [
     },
     {
         "id": 64,
-        "name": "fregona/cubo",
+        "name": "fregona",
         "type": "limpieza/cocina",
         "price": 40
     },
     {
         "id": 65,
-        "name": "escoba/recogedor",
+        "name": "escoba",
         "type": "limpieza/cocina",
         "price": 40
     }, {
@@ -415,7 +415,7 @@ export const listItems: listItem[] = [
     },
     {
         "id": 69,
-        "name": "alendras",
+        "name": "almendras",
         "type": "frutos secos ",
         "price": 15
     },

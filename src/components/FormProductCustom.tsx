@@ -1,24 +1,28 @@
-import{ useState } from "react";
+import { useState } from "react";
 import { uid } from "uid";
-import type { listItem } from "../types/types"
+import type { listItem } from "../types/types";
 
 interface FormProps {
-    addOtherItem: (filteredItems: listItem) => void
-
+    setShowNewProduct: (show: boolean) => void;
+    addOtherItem: (filteredItems: listItem) => void;
+    probando: (pushFIlter: listItem) => void;
+    itemCategories: string[];
 }
 
-const FormProductCustom: React.FC<FormProps> = ({ addOtherItem }) => {
+const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduct, probando, itemCategories }) => {
     // Estados para almacenar el nombre y el precio del producto
     const [productName, setProductName] = useState<string>("");
+    const [productType, setProductType] = useState<string>("");
 
     // Funciones para manejar cambios en los campos de entrada
-    const handleNameChange = (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
+    const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setProductName(event.target.value);
     };
 
-
+    const handleTypeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+        const newValue = event.target.value;
+        setProductType(newValue); // Actualizar el estado productType con el nuevo valor seleccionado
+    };
 
     function generateNumericId(): number {
         const alphanumericId = uid(60); // Generar un identificador único alfanumérico
@@ -26,7 +30,6 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem }) => {
         return numericId;
     }
 
-    // Función para manejar el envío del formulario
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         // Crear un nuevo objeto de producto con los datos del formulario
@@ -34,32 +37,53 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem }) => {
             id: generateNumericId(), // Generar un id único
             name: productName.trim().replace(/[.;,]/g, "").toLowerCase(),
             price: 0,
-            type: 'other'
+            type: productType, // Usar el valor actual de productType
         };
 
-        newProduct.name.length < 2 ? setProductName("") : addOtherItem(newProduct)
+        console.log(newProduct);
+        if (newProduct.name.length < 2) {
+            return setProductName("");
+        }
 
-        setProductName("")
-            // Limpia los campos después de enviar el formulario
-            ;
-
+        setShowNewProduct(false);
+        addOtherItem(newProduct);
+        probando(newProduct);
+        setProductName("");
+        setProductType(""); // Limpiar el estado productType después de enviar el formulario
     };
 
     return (
-        <form onSubmit={handleSubmit}>
-            <div>
-                <label htmlFor="productName">Nombre del Producto:</label>
+        <form className="flex flex-row justify-around w-6/6" onSubmit={handleSubmit}>
+            <div className="border-b-2 border-emerald-600 w-4/6 flex flex-col ">
+                <label className="text-sm" htmlFor="productName">
+                    Producto:
+                </label>
                 <input
+                    className="focus:outline-none focus:border-transparent"
                     type="text"
                     id="productName"
                     value={productName}
                     onChange={handleNameChange}
                 />
+                <select name="productType" id="productType" onChange={handleTypeChange}>
+
+                    {itemCategories.map(category => (
+
+                        <option
+                            key={category}
+                            value={category}>{category}</option>
+
+                    ))}
+
+
+                </select>
+
             </div>
 
-
-            <button type="submit">Guardar Producto</button>
-        </form>
+            <button className="text-sm w-1/6" type="submit">
+                Guardar
+            </button>
+        </form >
     );
 };
 

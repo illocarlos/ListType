@@ -13,37 +13,89 @@ import OrderTotal from "./components/OrderTotal.tsx"
 import ButtonComponent from './components/ButtonComponent.tsx'
 import ListOrder from "./components/ListOrder.tsx"
 import FormProductCustom from "./components/FormProductCustom.tsx"
-
 function App() {
-  const [show, setshow] = useState<boolean>(false)
-  const { order, addItem, removeItem, addOtherItem } = useList()
+  const [show, setshow] = useState<boolean>(false);
+  const [showNewProduct, setShowNewProduct] = useState<boolean>(false);
+
+  const { order, addItem, removeItem, addOtherItem } = useList();
 
   const [selectedCheckbox, setSelectedCheckbox] = useState<string | null>(null);
   const [activeButton, setActiveButton] = useState<string | null>(null);
 
   const [filteredItems, setFilteredItems] = useState<listItem[]>([]);
   const [itemCategories, setItemCategories] = useState<string[]>([]);
+  const [allItem, setAllItem] = useState<listItem[]>([]);
 
   const showProduct = () => {
-    setshow(!show)
-  }
+    setshow(!show);
+    if (!show) {
+      setShowNewProduct(false);
+    }
+  };
+
+  const createProduct = () => {
+    setShowNewProduct(!showNewProduct);
+  };
+
   const filterFunction = (value: string) => {
     setSelectedCheckbox(value === selectedCheckbox ? null : value);
     setActiveButton(value === activeButton ? null : value);
+
     if (value) {
-      const filter = listItems.filter(item => item.type === value)
-      setFilteredItems(filter)
+      const array = [...listItems, ...allItem];
+      const filteredArray = array.filter(item => item.type === value);
+
+      const uniqueItems: { [name: string]: listItem } = {};
+      filteredArray.forEach(item => {
+        if (!uniqueItems[item.name]) {
+          uniqueItems[item.name] = item;
+        }
+      });
+      const uniqueFilteredItems = Object.values(uniqueItems);
+
+      console.log('Unique filtered items:', uniqueFilteredItems);
+      setFilteredItems(uniqueFilteredItems);
     }
   };
 
   useEffect(() => {
-
     const uniqueNames = new Set(listItems.map(item => item.type));
     setItemCategories([...uniqueNames]);
-    console.log('eeeeee', uniqueNames)
-    // ingresamos en el array al usar el filtro y cogemos solo los que necesitamos
     setFilteredItems(listItems);
   }, []);
+
+  useEffect(() => {
+    const storedAllItems = JSON.parse(localStorage.getItem('allItem') || '[]');
+    setAllItem(storedAllItems);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('allItem', JSON.stringify(allItem));
+  }, [allItem]);
+
+  const probando = (pushFilter: listItem) => {
+    setAllItem([...allItem, pushFilter]);
+  };
+
+  useEffect(() => {
+    const other = {
+      name: allItem[0]?.name,
+      price: allItem[0]?.price,
+      type: allItem[0]?.type,
+      id: allItem[0]?.id
+    };
+    const itemExist = filteredItems.find(orderItem => orderItem.name === other.name);
+
+    if (itemExist || other.name === undefined) {
+      return console.log('es trueeeee');
+    } else {
+      const newItem = { ...other };
+      setFilteredItems([...filteredItems, newItem]);
+    }
+    setAllItem([]);
+  }, [allItem]);
+
+
 
 
 
@@ -56,7 +108,7 @@ function App() {
       >
         <h1
           className="text-white text-4xl text-center font-bold uppercase"
-        >mercadonal</h1>
+        >Lista de la compra</h1>
       </header>
 
       <main
@@ -81,17 +133,27 @@ function App() {
             <h2
               className=" ml-3 uppercase font-extrabold text-4xl mb-9"
             > Filtro</h2>
-
           </div>
 
           <div
-            className={` ${show ? "block" : "hidden"}`}
+            className={` ${show ? "block " : "hidden"}`}
           >
-            <FormProductCustom
-              addOtherItem={addOtherItem}
+            <div
+              className="flex flex-row justify-center"
+            >
 
-            />
-
+              <button
+                onClick={() => createProduct()}
+              > nuevo producto</button>
+              <div className={` ${showNewProduct ? '  fixed  bottom-12 h-3/6 w-full md:bottom-56  bg-white md:w-3/6 md:max-h-80 transform transition-all duration-500 ease-linear ' : ' fixed -bottom-full transform transition-all duration-1000 ease-in-out '}`}>
+                <FormProductCustom
+                  addOtherItem={addOtherItem}
+                  setShowNewProduct={setShowNewProduct}
+                  probando={probando}
+                  itemCategories={itemCategories}
+                />
+              </div>
+            </div>
             <div className="grid gap-y-6 py-5 grid-cols-2 my-5 border-2 border-y-zinc-300 md:border-0 ">
 
               {itemCategories.map(item => (
@@ -131,7 +193,7 @@ function App() {
 
           />
         </div>
-      </main>
+      </main >
     </>
   )
 }
