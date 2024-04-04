@@ -26,6 +26,28 @@ function App() {
   const [itemCategories, setItemCategories] = useState<string[]>([]);
   const [allItem, setAllItem] = useState<listItem[]>([]);
 
+
+  const [itemArrayNew, setItemArrayNew] = useState<listItem[]>(() => {
+    const savedItem = localStorage.getItem("itemArrayNew");
+    return savedItem ? JSON.parse(savedItem) : [];
+  });
+
+
+  useEffect(() => {
+    const savedItem = localStorage.getItem("itemArrayNew");
+    if (savedItem) {
+      setItemArrayNew(JSON.parse(savedItem));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("itemArrayNew", JSON.stringify(itemArrayNew));
+  }, [itemArrayNew]);
+
+
+
+
+
   const showProduct = () => {
     setshow(!show);
     if (!show) {
@@ -38,11 +60,13 @@ function App() {
   };
 
   const filterFunction = (value: string) => {
+
+
     setSelectedCheckbox(value === selectedCheckbox ? null : value);
     setActiveButton(value === activeButton ? null : value);
 
     if (value) {
-      const array = [...listItems, ...allItem];
+      const array = [...listItems, ...itemArrayNew, ...filteredItems];
       const filteredArray = array.filter(item => item.type === value);
 
       const uniqueItems: { [name: string]: listItem } = {};
@@ -53,7 +77,7 @@ function App() {
       });
       const uniqueFilteredItems = Object.values(uniqueItems);
 
-      console.log('Unique filtered items:', uniqueFilteredItems);
+      console.log('Unique filtered items:', allItem);
       setFilteredItems(uniqueFilteredItems);
     }
   };
@@ -64,14 +88,7 @@ function App() {
     setFilteredItems(listItems);
   }, []);
 
-  useEffect(() => {
-    const storedAllItems = JSON.parse(localStorage.getItem('allItem') || '[]');
-    setAllItem(storedAllItems);
-  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('allItem', JSON.stringify(allItem));
-  }, [allItem]);
 
   const probando = (pushFilter: listItem) => {
     setAllItem([...allItem, pushFilter]);
@@ -87,16 +104,14 @@ function App() {
     const itemExist = filteredItems.find(orderItem => orderItem.name === other.name);
 
     if (itemExist || other.name === undefined) {
-      return console.log('es trueeeee');
+      return
     } else {
       const newItem = { ...other };
+      setItemArrayNew([...itemArrayNew, newItem])
       setFilteredItems([...filteredItems, newItem]);
     }
     setAllItem([]);
-  }, [allItem]);
-
-
-
+  }, [allItem, itemArrayNew]);
 
 
 
@@ -114,6 +129,15 @@ function App() {
       <main
         className=" max-w-6xl mx-auto py-20 grid md:grid-cols-2"
       >
+        {/* button para enseñar filtros o ver cesta */}
+        <button
+          onClick={showProduct}
+          className={`fixed bottom-0 uppercase  w-screen font-extrabold  ${show ? 'bg-emerald-500 text-white uppercase ' : 'bg-white text-emerald-500 border-dashed border-t-2 border-emerald-500'}`}
+        >
+          {show ? 'ver cesta ' : 'filtrar'}
+        </button>
+
+
         <div>
           <div
             className="flex flex-row justify-center"
@@ -139,13 +163,20 @@ function App() {
             className={` ${show ? "block " : "hidden"}`}
           >
             <div
-              className="flex flex-row justify-center"
+              className="flex flex-row justify-center px-2"
             >
 
               <button
+                className=" uppercase p-1 border-2 font-extrabold bg-gray-300 border-gray-500"
                 onClick={() => createProduct()}
-              > nuevo producto</button>
-              <div className={` ${showNewProduct ? '  fixed  bottom-12 h-3/6 w-full md:bottom-56  bg-white md:w-3/6 md:max-h-80 transform transition-all duration-500 ease-linear ' : ' fixed -bottom-full transform transition-all duration-1000 ease-in-out '}`}>
+              > -nuevo producto-</button>
+              <div className={` ${showNewProduct ? '  fixed  bottom-6 h-2/6 w-full md:bottom-56  bg-white md:w-3/6 md:max-h-96 transform transition-all duration-500 ease-linear ' : ' fixed -bottom-full transform transition-all duration-1000 ease-in-out '}`}>
+
+                <button
+                  onClick={createProduct}
+                  className="text-xl font-extrabold w-full bg-red-300">
+                  X
+                </button>
                 <FormProductCustom
                   addOtherItem={addOtherItem}
                   setShowNewProduct={setShowNewProduct}

@@ -53,20 +53,28 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
     };
 
     return (
-        <form className="flex flex-row justify-around w-6/6" onSubmit={handleSubmit}>
-            <div className="border-b-2 border-emerald-600 w-4/6 flex flex-col ">
-                <label className="text-sm" htmlFor="productName">
-                    Producto:
-                </label>
-                <input
-                    className="focus:outline-none focus:border-transparent"
-                    type="text"
-                    id="productName"
-                    value={productName}
-                    onChange={handleNameChange}
-                />
+        <form className="flex flex-col items-center justify-around w-6/6" onSubmit={handleSubmit}>
+
+            <div className="border-b-2 border-emerald-600  w-4/6 flex flex-col ">
+                <div className="border-b-2 border-emerald-600 my-7 ">
+
+                    <label className="text-sm" htmlFor="productName">
+                        Producto:
+                    </label>
+                    <input
+                        className="focus:outline-none focus:border-transparent "
+                        type="text"
+                        id="productName"
+                        value={productName}
+                        onChange={handleNameChange}
+                    />
+                </div>
+
                 <select name="productType" id="productType" onChange={handleTypeChange}>
 
+
+                    <option
+                        value="">--selecciona categoria --</option>
                     {itemCategories.map(category => (
 
                         <option
@@ -80,7 +88,7 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
 
             </div>
 
-            <button className="text-sm w-1/6" type="submit">
+            <button className="text-sm rounded-lg  w-2/6 p-2  my-7 bg-emerald-400" type="submit">
                 Guardar
             </button>
         </form >
