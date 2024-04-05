@@ -3,8 +3,6 @@ import { listItem, orderItem } from "../types/types";
 
 export default function useList() {
 
-
-
     // Inicializar el estado order con un arreglo vacío si no hay nada en localStorage
     const [order, setOrder] = useState<orderItem[]>(() => {
         const savedOrder = localStorage.getItem("order");
@@ -59,6 +57,8 @@ export default function useList() {
             setOrder([...order, newItem]);
         }
     };
+
+    
 
     return {
         order,

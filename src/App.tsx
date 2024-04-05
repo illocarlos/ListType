@@ -132,7 +132,7 @@ function App() {
         {/* button para enseñar filtros o ver cesta */}
         <button
           onClick={showProduct}
-          className={`fixed bottom-0 uppercase  w-screen font-extrabold  ${show ? 'bg-emerald-500 text-white uppercase ' : 'bg-white text-emerald-500 border-dashed border-t-2 border-emerald-500'}`}
+          className={`fixed bottom-0 uppercase  w-screen font-extrabold md:hidden ${show ? 'bg-emerald-500 text-white uppercase ' : 'bg-white text-emerald-500 border-dashed border-t-2 border-emerald-500'}`}
         >
           {show ? 'ver cesta ' : 'filtrar'}
         </button>
@@ -170,11 +170,11 @@ function App() {
                 className=" uppercase p-1 border-2 font-extrabold bg-gray-300 border-gray-500"
                 onClick={() => createProduct()}
               > -nuevo producto-</button>
-              <div className={` ${showNewProduct ? '  fixed  bottom-6 h-2/6 w-full md:bottom-56  bg-white md:w-3/6 md:max-h-96 transform transition-all duration-500 ease-linear ' : ' fixed -bottom-full transform transition-all duration-1000 ease-in-out '}`}>
+              <div className={` ${showNewProduct ? '  fixed  bottom-6 h-2/6 w-full md:bottom-56 bg-white border-2 border-emerald-300 md:w-2/6 md:max-h-96 transform transition-all duration-500 ease-linear ' : ' fixed -bottom-full transform transition-all duration-1000 ease-in-out '}`}>
 
                 <button
                   onClick={createProduct}
-                  className="text-xl font-extrabold w-full bg-red-300">
+                  className="text-xl font-extrabold w-full bg-red-300 md:w-16">
                   X
                 </button>
                 <FormProductCustom

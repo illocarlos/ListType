@@ -25,11 +25,9 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
     };
 
     function generateNumericId(): number {
-        const alphanumericId = uid(60); // Generar un identificador único alfanumérico
-        const numericId = parseInt(alphanumericId.replace(/\D/g, ""), 20); // Extraer solo los dígitos numéricos y convertirlos a un número
+        const numericId = Math.floor(Math.random() * 9000000000) + 1000000000; // Generar un número aleatorio de 10 dígitos
         return numericId;
     }
-
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         // Crear un nuevo objeto de producto con los datos del formulario
