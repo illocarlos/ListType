@@ -39,8 +39,8 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
         };
 
         console.log(newProduct);
-        if (newProduct.name.length < 2) {
-            return setProductName("");
+        if (newProduct.name.length < 2 || !newProduct.type) {
+            return alert("nita por favor el producto tiene que tener mas 3 tres letras y una categoria");
         }
 
         setShowNewProduct(false);
