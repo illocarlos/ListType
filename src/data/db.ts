@@ -271,27 +271,27 @@ export const listItems: listItem[] = [
     {
         "id": 45,
         "name": "chocolate blanco",
-        "type": "dulce",
+        "type": "dulces",
         "price": 40
     },
     {
         "id": 46,
         "name": "donuts",
-        "type": "dulce",
+        "type": "dulces",
         "price": 40
     },
 
     {
         "id": 47,
         "name": "galletas",
-        "type": "dulce",
+        "type": "dulces",
         "price": 40
     },
 
     {
         "id": 48,
         "name": "leche",
-        "type": "lacteo",
+        "type": "lacteos",
         "price": 40
     },
     {
@@ -322,7 +322,7 @@ export const listItems: listItem[] = [
     {
         "id": 53,
         "name": "queso curado",
-        "type": "lacteo",
+        "type": "lacteos",
         "price": 40
     },
     {
@@ -416,7 +416,7 @@ export const listItems: listItem[] = [
     {
         "id": 69,
         "name": "almendras",
-        "type": "frutos secos ",
+        "type": "frutos secos",
         "price": 15
     },
 
