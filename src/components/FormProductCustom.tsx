@@ -4,11 +4,11 @@ import type { listItem } from "../types/types";
 interface FormProps {
     setShowNewProduct: (show: boolean) => void;
     addOtherItem: (filteredItems: listItem) => void;
-    probando: (pushFIlter: listItem) => void;
+    createArrayItem: (pushFIlter: listItem) => void;
     itemCategories: string[];
 }
 
-const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduct, probando, itemCategories }) => {
+const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduct, createArrayItem, itemCategories }) => {
     // Estados para almacenar el nombre y el precio del producto
     const [productName, setProductName] = useState<string>("");
     const [productType, setProductType] = useState<string>("");
@@ -37,16 +37,16 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
             type: productType, // Usar el valor actual de productType
         };
 
-        console.log(newProduct);
         if (newProduct.name.length < 2 || !newProduct.type) {
             return alert("nita por favor el producto tiene que tener mas 3 tres letras y una categoria");
         }
 
         setShowNewProduct(false);
         addOtherItem(newProduct);
-        probando(newProduct);
+        createArrayItem(newProduct);
         setProductName("");
-        setProductType(""); // Limpiar el estado productType después de enviar el formulario
+        setProductType(" "); // Limpiar el estado productType después de enviar el formulario
+
     };
 
     return (

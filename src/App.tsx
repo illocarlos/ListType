@@ -90,7 +90,7 @@ function App() {
 
 
 
-  const probando = (pushFilter: listItem) => {
+  const createArrayItem = (pushFilter: listItem) => {
     setAllItem([...allItem, pushFilter]);
   };
 
@@ -180,7 +180,7 @@ function App() {
                 <FormProductCustom
                   addOtherItem={addOtherItem}
                   setShowNewProduct={setShowNewProduct}
-                  probando={probando}
+                  createArrayItem={createArrayItem}
                   itemCategories={itemCategories}
                 />
               </div>
