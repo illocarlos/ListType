@@ -13,6 +13,9 @@ import OrderTotal from "./components/OrderTotal.tsx"
 import ButtonComponent from './components/ButtonComponent.tsx'
 import ListOrder from "./components/ListOrder.tsx"
 import FormProductCustom from "./components/FormProductCustom.tsx"
+import ButtonPdf from "./components/ButtonPdf.tsx"
+
+
 function App() {
   const [show, setshow] = useState<boolean>(false);
   const [showNewProduct, setShowNewProduct] = useState<boolean>(false);
@@ -215,6 +218,10 @@ function App() {
         <div
           className="border border-dashed border-slate-900 p-5 rounded-md space-y-10 md:border-none overflow-y-auto max-h-96"
         >
+
+          <ButtonPdf
+            order={order}
+          ></ButtonPdf>
           <ListOrder
             order={order}
             removeItem={removeItem}
