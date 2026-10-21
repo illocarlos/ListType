@@ -1,9 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { Plus, RefreshCw, Search, ShoppingBasket, X } from "lucide-react"
-// base de dato interna en la misma aplicacion donde recogemos un array de objeto
-import { listItems } from "./data/db"
-// hooks: la lista (localStorage) y el catálogo de Mercadona
+import { Heart, RefreshCw, Search, ShoppingBasket, X } from "lucide-react"
+// hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
+import useFavorites from "./hooks/useFavorites"
 import useMercadona from "./hooks/useMercadona"
 import type { SearchableProduct } from "./hooks/useMercadona"
 
@@ -14,27 +13,16 @@ import { mercadonaDetail, normalizeText, toListItem } from "./helpers/mercadona"
 import OrderTotal from "./components/OrderTotal.tsx"
 import ButtonComponent from './components/ButtonComponent.tsx'
 import ListOrder from "./components/ListOrder.tsx"
-import FormProductCustom from "./components/FormProductCustom.tsx"
 import ButtonPdf from "./components/ButtonPdf.tsx"
 import MercadonaCatalog from "./components/MercadonaCatalog.tsx"
 import ProductRow from "./components/ProductRow.tsx"
 import Sheet from "./components/Sheet.tsx"
 
-type Source = "todo" | "propios" | "mercadona"
+type Source = "todo" | "favoritos" | "mercadona"
 
 const PAGE_SIZE = 40
-// En "Todo", cuántos productos propios se enseñan antes que los de Mercadona
-const OWN_PREVIEW = 5
-
-// Quita repetidos por nombre (el primero gana), igual que hacía el filtro original
-function uniqueByName(items: listItem[]) {
-  const seen = new Set<string>();
-  return items.filter(item => {
-    if (seen.has(item.name)) return false;
-    seen.add(item.name);
-    return true;
-  });
-}
+// En "Todo", cuántos favoritos se enseñan antes que los de Mercadona
+const FAVORITES_PREVIEW = 5
 
 // Coincide si están todas las palabras; primero lo que empieza por lo escrito
 function makeMatcher(term: string) {
@@ -48,8 +36,12 @@ function makeMatcher(term: string) {
   return { matches, score };
 }
 
+const itemDetail = (item: listItem) =>
+  [item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
+
 function App() {
-  const { order, addItem, decreaseItem, removeItem, addOtherItem } = useList();
+  const { order, addItem, decreaseItem, removeItem } = useList();
+  const { favorites, isFavorite, toggleFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
   const [query, setQuery] = useState<string>("");
@@ -57,43 +49,39 @@ function App() {
   const [source, setSource] = useState<Source>("todo");
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [selectedCheckbox, setSelectedCheckbox] = useState<string | null>(null);
-  const [showNewProduct, setShowNewProduct] = useState<boolean>(false);
-  const [newProductName, setNewProductName] = useState<string>("");
   const [listOpen, setListOpen] = useState<boolean>(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
 
-  // Productos creados a mano, persistidos en localStorage (misma clave y formato de siempre)
-  const [itemArrayNew, setItemArrayNew] = useState<listItem[]>(() => {
-    try {
-      const savedItem = localStorage.getItem("itemArrayNew");
-      const parsed = savedItem ? JSON.parse(savedItem) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("itemArrayNew", JSON.stringify(itemArrayNew));
-    } catch {
-      // sin espacio: se mantiene en memoria
-    }
-  }, [itemArrayNew]);
-
-
-  // Categorías del catálogo propio
-  const itemCategories = useMemo(() => [...new Set(listItems.map(item => item.type))], []);
-
-  // Catálogo propio + productos creados a mano
-  const allOwnItems = useMemo(() => uniqueByName([...listItems, ...itemArrayNew]), [itemArrayNew]);
-
-  // Rejilla de "mis productos" sin búsqueda: todo o la categoría elegida
-  const filteredItems = useMemo(
-    () => selectedCheckbox ? allOwnItems.filter(item => item.type === selectedCheckbox) : allOwnItems,
-    [allOwnItems, selectedCheckbox]
+  // Categorías de los favoritos (el pasillo de Mercadona de cada uno)
+  const favoriteCategories = useMemo(
+    () => [...new Set(favorites.map(item => item.type).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")),
+    [favorites]
   );
+
+  // Si se quita el último favorito de una categoría, se desmarca el filtro
+  useEffect(() => {
+    if (selectedCheckbox && !favoriteCategories.includes(selectedCheckbox)) setSelectedCheckbox(null);
+  }, [favoriteCategories, selectedCheckbox]);
+
+  const filteredFavorites = useMemo(
+    () => selectedCheckbox ? favorites.filter(item => item.type === selectedCheckbox) : favorites,
+    [favorites, selectedCheckbox]
+  );
+
+  // Cuando llegan datos nuevos de Mercadona, los favoritos se actualizan (precio, foto…)
+  useEffect(() => {
+    if (favorites.length === 0) return;
+    const wanted = new Set(favorites.map(item => item.mercadonaId).filter(Boolean));
+    const fresh = new Map<number, listItem>();
+    for (const product of mercadona.searchable) {
+      if (wanted.has(product.mercadonaId)) {
+        const item = toListItem(product);
+        fresh.set(item.id, item);
+      }
+    }
+    if (fresh.size) refreshFavorites(fresh);
+  }, [mercadona.searchable, favorites, refreshFavorites]);
 
   // Cantidad de cada producto en la lista, para pintar − n + en los resultados
   const quantities = useMemo(() => new Map(order.map(item => [item.id, item.quantity])), [order]);
@@ -108,15 +96,15 @@ function App() {
   const term = normalizeText(deferredQuery.trim());
   const searching = term.length > 0;
 
-  const ownResults = useMemo(() => {
+  const favoriteResults = useMemo(() => {
     if (!term) return [];
     const { matches, score } = makeMatcher(term);
-    return allOwnItems
+    return favorites
       .map(item => ({ item, name: normalizeText(item.name) }))
       .filter(entry => matches(entry.name))
       .sort((a, b) => score(a.name) - score(b.name) || a.name.localeCompare(b.name, "es", { numeric: true }))
       .map(entry => entry.item);
-  }, [term, allOwnItems]);
+  }, [term, favorites]);
 
   const mercadonaResults = useMemo<SearchableProduct[]>(() => {
     if (!term) return [];
@@ -130,11 +118,11 @@ function App() {
     setVisibleCount(PAGE_SIZE);
   }, [term, source]);
 
-  const showOwn = source !== "mercadona";
-  const showMercadona = source !== "propios";
+  const showFavorites = source !== "mercadona";
+  const showMercadona = source !== "favoritos";
   const loadingCatalog = mercadona.indexState === "running" || mercadona.groupsState === "loading";
   const noResults = searching
-    && (!showOwn || ownResults.length === 0)
+    && (!showFavorites || favoriteResults.length === 0)
     && (!showMercadona || mercadonaResults.length === 0);
 
   const handleQueryChange = (value: string) => {
@@ -155,37 +143,33 @@ function App() {
     setSelectedCheckbox(previous => previous === value ? null : value);
   };
 
-  // Guarda el producto creado a mano si no existe ya con ese nombre
-  const createArrayItem = (newItem: listItem) => {
-    setItemArrayNew(previous => {
-      const exists = listItems.some(item => item.name === newItem.name)
-        || previous.some(item => item.name === newItem.name);
-      return exists ? previous : [...previous, newItem];
-    });
-  };
-
   // En los resultados, "−" con 1 unidad quita el producto de la lista
   const decreaseFromResults = (item: listItem) => {
     if (quantityOf(item.id) > 1) decreaseItem(item.id);
     else removeItem(item.id);
   };
 
-  const openNewProduct = (name = "") => {
-    setNewProductName(name);
-    setShowNewProduct(true);
-  };
-
-  const closeNewProduct = useCallback(() => setShowNewProduct(false), []);
   const closeList = useCallback(() => setListOpen(false), []);
-
-  const ownDetail = (item: listItem) => item.source === "manual" ? `${item.type} · creado por ti` : item.type;
-
-
-  // ---------- Piezas ----------
 
   const missingAisles = mercadona.indexProgress
     ? mercadona.indexProgress.total - mercadona.indexProgress.done + mercadona.indexProgress.failed
     : 0;
+
+
+  // ---------- Piezas ----------
+
+  const favoriteRow = (item: listItem) => (
+    <ProductRow
+      key={item.id}
+      item={item}
+      detail={itemDetail(item)}
+      quantity={quantityOf(item.id)}
+      onAdd={addItem}
+      onDecrease={decreaseFromResults}
+      favorite
+      onToggleFavorite={toggleFavorite}
+    />
+  );
 
   const catalogStatus = (
     <>
@@ -272,7 +256,7 @@ function App() {
             <h1 className="text-xl font-extrabold tracking-tight">Lista de la compra</h1>
           </div>
           <div className="pb-3 md:pr-[412px]">
-            <label htmlFor="search" className="sr-only">Buscar productos</label>
+            <label htmlFor="search" className="sr-only">Buscar productos de Mercadona</label>
             <div className="relative">
               <Search size={20} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input
@@ -286,7 +270,7 @@ function App() {
                 onFocus={mercadona.ensureIndex}
                 onChange={event => handleQueryChange(event.target.value)}
                 onKeyDown={event => { if (event.key === "Escape") setQuery(""); }}
-                placeholder="Busca en Mercadona y en tus productos"
+                placeholder="Busca en Mercadona"
                 className="h-12 w-full rounded-md bg-surface pl-11 pr-12 text-base text-text placeholder:text-muted focus:outline-none focus-visible:outline-highlight"
               />
               {query && (
@@ -311,33 +295,24 @@ function App() {
               <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto" role="group" aria-label="Dónde buscar">
                 {sourceChip("todo", "Todo")}
                 {sourceChip("mercadona", "Mercadona", mercadonaResults.length)}
-                {sourceChip("propios", "Mis productos", ownResults.length)}
+                {sourceChip("favoritos", "Favoritos", favoriteResults.length)}
               </div>
 
               {showMercadona && catalogStatus}
 
-              {showOwn && ownResults.length > 0 && (
-                <section aria-labelledby="own-results" className="mb-6">
-                  <h2 id="own-results" className="text-sm font-semibold text-muted mb-2">Tus productos</h2>
+              {showFavorites && favoriteResults.length > 0 && (
+                <section aria-labelledby="favorite-results" className="mb-6">
+                  <h2 id="favorite-results" className="text-sm font-semibold text-muted mb-2">Tus favoritos</h2>
                   <ul className="space-y-2">
-                    {(source === "todo" ? ownResults.slice(0, OWN_PREVIEW) : ownResults).map(item => (
-                      <ProductRow
-                        key={item.id}
-                        item={item}
-                        detail={ownDetail(item)}
-                        quantity={quantityOf(item.id)}
-                        onAdd={addItem}
-                        onDecrease={decreaseFromResults}
-                      />
-                    ))}
+                    {(source === "todo" ? favoriteResults.slice(0, FAVORITES_PREVIEW) : favoriteResults).map(favoriteRow)}
                   </ul>
-                  {source === "todo" && ownResults.length > OWN_PREVIEW && (
+                  {source === "todo" && favoriteResults.length > FAVORITES_PREVIEW && (
                     <button
                       type="button"
-                      onClick={() => setSource("propios")}
+                      onClick={() => setSource("favoritos")}
                       className="mt-2 h-11 px-1 text-sm font-semibold text-accent underline underline-offset-2"
                     >
-                      Ver tus {ownResults.length} productos
+                      Ver tus {favoriteResults.length} favoritos
                     </button>
                   )}
                 </section>
@@ -360,6 +335,8 @@ function App() {
                           quantity={quantityOf(item.id)}
                           onAdd={addItem}
                           onDecrease={decreaseFromResults}
+                          favorite={isFavorite(item.id)}
+                          onToggleFavorite={toggleFavorite}
                         />
                       );
                     })}
@@ -382,54 +359,48 @@ function App() {
                     {loadingCatalog ? "Buscando…" : `No hay nada que coincida con «${deferredQuery.trim()}».`}
                   </p>
                   {!loadingCatalog && (
-                    <button
-                      type="button"
-                      onClick={() => openNewProduct(deferredQuery.trim())}
-                      className="mt-4 inline-flex items-center gap-2 h-11 px-4 rounded-md bg-accent text-on-accent font-semibold hover:bg-accent-strong"
-                    >
-                      <Plus size={18} aria-hidden="true" /> Crear «{deferredQuery.trim()}»
-                    </button>
+                    <p className="text-sm text-muted mt-1">Prueba con otra palabra o con menos letras.</p>
                   )}
                 </div>
               )}
             </div>
           ) : (
             <div>
-              <section aria-labelledby="own-title">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <h2 id="own-title" className="text-lg font-bold">Tus productos</h2>
-                  <button
-                    type="button"
-                    onClick={() => openNewProduct()}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-pill bg-accent-soft text-on-accent-soft text-sm font-semibold hover:bg-accent hover:text-on-accent"
-                  >
-                    <Plus size={16} aria-hidden="true" /> Nuevo producto
-                  </button>
+              <section aria-labelledby="favorites-title">
+                <div className="flex items-baseline justify-between gap-3 mb-3">
+                  <h2 id="favorites-title" className="text-lg font-bold">Tus favoritos</h2>
+                  {favorites.length > 0 && (
+                    <span className="text-sm text-muted tabular">{favorites.length}</span>
+                  )}
                 </div>
 
-                <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Categorías">
-                  {itemCategories.map(item => (
-                    <ButtonComponent
-                      key={item}
-                      filterFunction={filterFunction}
-                      type={item}
-                      isActive={selectedCheckbox === item}
-                    />
-                  ))}
-                </div>
-
-                <ul className="space-y-2">
-                  {filteredItems.map(item => (
-                    <ProductRow
-                      key={item.id}
-                      item={item}
-                      detail={ownDetail(item)}
-                      quantity={quantityOf(item.id)}
-                      onAdd={addItem}
-                      onDecrease={decreaseFromResults}
-                    />
-                  ))}
-                </ul>
+                {favorites.length === 0 ? (
+                  <div className="rounded-md bg-surface p-6 text-center">
+                    <Heart size={28} aria-hidden="true" className="mx-auto text-danger" />
+                    <p className="mt-2 font-semibold">Aún no tienes favoritos</p>
+                    <p className="text-sm text-muted mt-1">
+                      Busca un producto de Mercadona y toca el corazón: aparecerá aquí para añadirlo a la lista de un toque.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {favoriteCategories.length > 1 && (
+                      <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Categorías">
+                        {favoriteCategories.map(item => (
+                          <ButtonComponent
+                            key={item}
+                            filterFunction={filterFunction}
+                            type={item}
+                            isActive={selectedCheckbox === item}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <ul className="space-y-2">
+                      {filteredFavorites.map(favoriteRow)}
+                    </ul>
+                  </>
+                )}
               </section>
 
               <MercadonaCatalog
@@ -442,6 +413,8 @@ function App() {
                 quantityOf={quantityOf}
                 onAdd={addItem}
                 onDecrease={decreaseFromResults}
+                isFavorite={isFavorite}
+                onToggleFavorite={toggleFavorite}
               />
             </div>
           )}
@@ -476,17 +449,6 @@ function App() {
 
       <Sheet open={listOpen} title={`Tu lista (${lineCount})`} onClose={closeList} variant="full">
         {listPanel(false)}
-      </Sheet>
-
-      <Sheet open={showNewProduct} title="Nuevo producto" onClose={closeNewProduct}>
-        <FormProductCustom
-          key={newProductName}
-          addOtherItem={addOtherItem}
-          setShowNewProduct={setShowNewProduct}
-          createArrayItem={createArrayItem}
-          itemCategories={itemCategories}
-          initialName={newProductName}
-        />
       </Sheet>
     </div>
   )

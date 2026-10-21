@@ -1,19 +1,19 @@
 feature,area,priority,original,clone,notes
-Catálogo propio de productos por categorías (69 productos / 17 categorías),lista (actual),must,yes,yes,src/data/db.ts. Conservar
-Filtrar productos por categoría con botones,lista (actual),must,yes,yes,arreglado: tocar otra vez la activa vuelve a todo; una sola categoría marcada
+Catálogo propio de productos por categorías (69 productos / 17 categorías),lista (actual),must,yes,skip,retirado por decisión del usuario (2026-10-21): solo Mercadona + favoritos
+Filtrar productos por categoría con botones,lista (actual),must,yes,yes,ahora filtra los favoritos por pasillo de Mercadona
 Añadir producto a la lista con un toque (+1 si ya está),lista (actual),must,yes,yes,addItem deduplica por id
-Crear producto a mano (nombre + categoría),alta manual (actual),must,yes,yes,arreglado: select controlado; mensaje coherente; sin el circuito allItem
-Productos creados a mano persisten tras recargar,alta manual (actual),must,yes,yes,arreglado: visibles en la rejilla nada más cargar
+Crear producto a mano (nombre + categoría),alta manual (actual),must,yes,skip,retirado por decisión del usuario (2026-10-21)
+Productos creados a mano persisten tras recargar,alta manual (actual),must,yes,skip,retirado por decisión del usuario; los datos guardados en itemArrayNew no se borran
 Lista persistente en localStorage,lista (actual),must,yes,yes,clave order. Formato debe seguir siendo compatible
 Cantidad por producto (Xn),cesta (actual),must,yes,yes,
 Subtotal por línea,cesta (actual),must,yes,yes,precios del catálogo propio son de relleno
-Total aproximado,cesta (actual),must,yes,partial,correcto con Mercadona; el catálogo propio sigue con precios de relleno (54 de 69 a 40 €)
+Total aproximado,cesta (actual),must,yes,yes,precios reales de Mercadona; ya no hay precios de relleno
 Quitar producto de la lista,cesta (actual),must,yes,yes,quita la línea entera
 Estado vacío de la cesta,cesta (actual),must,yes,yes,"""no tienes ningun producto"""
 Descargar la lista en PDF,pdf (actual),must,yes,yes,mismo botón y título; ahora con salto de página
 Botón PDF deshabilitado con lista vacía,pdf (actual),must,yes,yes,
 Diseño móvil con barra fija filtrar / ver cesta,lista (actual),must,yes,yes,
-Panel deslizante de alta manual,alta manual (actual),must,yes,yes,
+Panel deslizante de alta manual,alta manual (actual),must,yes,skip,retirado con el alta manual
 Navegar categorías de Mercadona (grupo > pasillo > subcategoría),catálogo Mercadona,must,yes,partial,hecho y probado con respuestas simuladas; falta verificar contra la API real en la vista previa
 Ver productos de Mercadona con foto nombre y precio,catálogo Mercadona,must,yes,partial,probado con datos simulados; falta la API real
 Añadir producto de Mercadona a la lista guardando una copia,catálogo Mercadona,must,yes,yes,copia en order con source mercadona; id fuera de rangos
@@ -40,3 +40,5 @@ Cuenta de cliente y login,tienda,could,yes,skip,sin cuentas ni base de datos por
 Búsqueda vía Algolia de Mercadona,catálogo Mercadona,should,yes,skip,usaría la clave incrustada en su frontend; se busca en local
 Marca y logo de Mercadona,marca,could,yes,skip,no se usa como identidad de la app
 Reseñas de productos,catálogo Mercadona,could,yes,skip,Mercadona no tiene
+Favoritos de Mercadona guardados en localStorage,favoritos,must,no,yes,corazón en cada producto; sección Tus favoritos con categorías; se actualizan con datos nuevos
+Diagnóstico de errores con origen (Vercel o Mercadona),datos,should,no,yes,ruta /api/mercadona?path=ping para comprobar el despliegue

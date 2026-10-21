@@ -15,13 +15,15 @@ type MercadonaCatalogProps = {
     quantityOf: (id: number) => number,
     onAdd: (item: listItem) => void,
     onDecrease: (item: listItem) => void,
+    isFavorite: (id: number) => boolean,
+    onToggleFavorite: (item: listItem) => void,
 }
 
 const errorMessage = (error: unknown) =>
     error instanceof MercadonaError ? error.message : "No se ha podido cargar el pasillo.";
 
 // Explorar Mercadona por pasillos (alternativa al buscador)
-const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups, onChangeWarehouse, quantityOf, onAdd, onDecrease }: MercadonaCatalogProps) => {
+const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups, onChangeWarehouse, quantityOf, onAdd, onDecrease, isFavorite, onToggleFavorite }: MercadonaCatalogProps) => {
     const [openGroupId, setOpenGroupId] = useState<number | null>(null);
     const [aisle, setAisle] = useState<MercadonaAisle | null>(null);
     const [products, setProducts] = useState<MercadonaProduct[]>([]);
@@ -138,6 +140,8 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
                                             quantity={quantityOf(item.id)}
                                             onAdd={onAdd}
                                             onDecrease={onDecrease}
+                                            favorite={isFavorite(item.id)}
+                                            onToggleFavorite={onToggleFavorite}
                                         />
                                     );
                                 })}

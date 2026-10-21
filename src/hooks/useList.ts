@@ -61,27 +61,10 @@ export default function useList() {
         setOrder(prevOrder => prevOrder.filter(item => item.id !== id));
     };
 
-    const addOtherItem = (item: listItem) => {
-        setOrder(prevOrder => {
-            const itemExist = prevOrder.find(orderItem => orderItem.name === item.name);
-            if (itemExist) {
-                return prevOrder.map(orderItem =>
-                    orderItem.name === item.name
-                        ? { ...orderItem, quantity: orderItem.quantity + 1 }
-                        : orderItem
-                );
-            }
-            return [...prevOrder, { ...item, quantity: 1 }];
-        });
-    };
-
-
-
     return {
         order,
         addItem,
         decreaseItem,
-        removeItem,
-        addOtherItem
+        removeItem
     };
 }

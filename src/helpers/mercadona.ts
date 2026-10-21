@@ -13,21 +13,32 @@ export const DEFAULT_WAREHOUSE = "svq1";
 
 type CacheEntry<T> = { savedAt: number, data: T };
 
-// Mensajes con el código real para poder diagnosticar qué falla (proxy, Mercadona o red)
-function describeStatus(status: number): string {
-    if (status === 429) return "Mercadona está recibiendo demasiadas peticiones. Prueba otra vez en un minuto (error 429).";
-    if (status === 0) return "No hay conexión con el servidor de la app. Revisa tu conexión (sin respuesta).";
-    if (status === 404) return "No se encuentra el servicio de Mercadona de la app (error 404).";
-    if (status === 403 || status === 401) return `Mercadona ha rechazado la petición (error ${status}).`;
+// De dónde viene el error: la función de Vercel (proxy) responde siempre con source: 'proxy';
+// si no viene, el error lo ha dado Vercel antes de llegar a la función (por ejemplo, 404 porque no existe)
+export type ErrorOrigin = "mercadona" | "vercel" | "red";
+
+// Mensajes con el código real y su origen para poder diagnosticar qué falla
+function describeStatus(status: number, origin: ErrorOrigin): string {
+    if (origin === "red") return "No hay conexión con el servidor de la app. Revisa tu conexión.";
+    if (origin === "vercel") {
+        return status === 404
+            ? "La app no encuentra su conexión con Mercadona en el servidor (error 404 de Vercel)."
+            : `El servidor de la app ha fallado (error ${status} de Vercel).`;
+    }
+    if (status === 429) return "Mercadona está recibiendo demasiadas peticiones. Prueba otra vez en un minuto (error 429 de Mercadona).";
+    if (status === 404) return "Mercadona no reconoce la dirección que se le pide (error 404 de Mercadona).";
+    if (status === 403 || status === 401) return `Mercadona ha rechazado la petición (error ${status} de Mercadona).`;
     if (status === 502 || status === 504) return `Mercadona no responde o ha devuelto algo inesperado (error ${status}).`;
-    return `No se ha podido cargar el catálogo de Mercadona (error ${status}).`;
+    return `No se ha podido cargar el catálogo de Mercadona (error ${status} de Mercadona).`;
 }
 
 export class MercadonaError extends Error {
     status: number;
-    constructor(status: number) {
-        super(`${describeStatus(status)} Tu lista sigue funcionando igual.`);
+    origin: ErrorOrigin;
+    constructor(status: number, origin: ErrorOrigin = "mercadona") {
+        super(`${describeStatus(status, origin)} Tu lista sigue funcionando igual.`);
         this.status = status;
+        this.origin = origin;
     }
 }
 
@@ -232,16 +243,27 @@ function parseAisle(json: unknown, aisleName: string): MercadonaProduct[] {
 
 // ---------- Peticiones ----------
 
+// Se llama a la función directamente (sin reglas de reescritura en vercel.json)
 async function getJson(path: string, wh: string): Promise<unknown> {
+    const params = new URLSearchParams({ path, lang: "es", wh });
     let response: Response;
     try {
-        response = await fetch(`${API_BASE}/${path}?lang=es&wh=${encodeURIComponent(wh)}`, {
+        response = await fetch(`${API_BASE}?${params.toString()}`, {
             headers: { Accept: "application/json" },
         });
     } catch {
-        throw new MercadonaError(0);
+        throw new MercadonaError(0, "red");
     }
-    if (!response.ok) throw new MercadonaError(response.status);
+    if (!response.ok) {
+        let fromProxy = response.headers.get("x-listtype-proxy") === "1";
+        try {
+            const body = await response.json();
+            if (body && typeof body === "object" && (body as { source?: string }).source === "proxy") fromProxy = true;
+        } catch {
+            // cuerpo no JSON: lo ha respondido Vercel, no la función
+        }
+        throw new MercadonaError(response.status, fromProxy ? "mercadona" : "vercel");
+    }
     try {
         return await response.json();
     } catch {

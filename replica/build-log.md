@@ -37,3 +37,11 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - Errores de Mercadona con el código real (403, 404, 429, 502) para diagnosticar.
 - Se conservan: catálogo propio por categorías, alta manual, persistencia compatible, cantidades, quitar, total y PDF.
 - Pruebas: 52/52 en Chromium (escritorio y móvil) con respuestas simuladas.
+
+## 2026-10-21 · Favoritos y fuera productos a mano (decisión del usuario)
+
+- Se retiran el catálogo propio (`db.ts`) y el alta manual. Los datos ya guardados (`order`, `itemArrayNew`) no se borran: lo antiguo sigue en la lista hasta que se quite.
+- "Tus productos" pasa a ser **Tus favoritos**: productos de Mercadona marcados con el corazón, guardados en `localStorage["favorites"]` como copia completa (se ven aunque Mercadona falle) y actualizados cuando llegan datos nuevos.
+- Riesgo asumido: la app depende por completo de Mercadona y no se puede apuntar nada que Mercadona no venda.
+- Diagnóstico del 404: se quita `vercel.json`; la app llama a `/api/mercadona?path=…` y distingue el 404 de Vercel (función no encontrada) del 404 de Mercadona. Comprobación: `/api/mercadona?path=ping`.
+- Pruebas: 38/38 en Chromium (escritorio y móvil) con datos simulados; la función del proxy probada en local con peticiones simuladas.

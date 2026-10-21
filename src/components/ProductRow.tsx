@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react";
+import { Heart, Minus, Plus } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
 import type { listItem } from "../types/types";
 
@@ -9,6 +9,8 @@ type ProductRowProps = {
     quantity: number,
     onAdd: (item: listItem) => void,
     onDecrease: (item: listItem) => void,
+    favorite?: boolean,
+    onToggleFavorite?: (item: listItem) => void,
 }
 
 export const Thumb = ({ item, size = "md" }: { item: listItem, size?: "sm" | "md" }) => {
@@ -33,7 +35,7 @@ export const Thumb = ({ item, size = "md" }: { item: listItem, size?: "sm" | "md
     );
 };
 
-const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease }: ProductRowProps) => {
+const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite }: ProductRowProps) => {
     const inList = quantity > 0;
 
     return (
@@ -56,22 +58,34 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease }
                 </p>
             </div>
 
+            {onToggleFavorite && (
+                <button
+                    type="button"
+                    onClick={() => onToggleFavorite(item)}
+                    aria-pressed={favorite}
+                    aria-label={favorite ? `Quitar ${item.name} de favoritos` : `Guardar ${item.name} en favoritos`}
+                    className={`flex-none h-11 w-9 -mx-1 grid place-items-center rounded-full ${favorite ? "text-danger" : "text-muted hover:text-danger"}`}
+                >
+                    <Heart size={20} aria-hidden="true" fill={favorite ? "currentColor" : "none"} />
+                </button>
+            )}
+
             {inList ? (
                 <div className="flex-none flex items-center rounded-pill bg-surface border border-border">
                     <button
                         type="button"
                         onClick={() => onDecrease(item)}
                         aria-label={quantity === 1 ? `Quitar ${item.name} de la lista` : `Quitar una unidad de ${item.name}`}
-                        className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
+                        className="h-11 w-10 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
                     >
                         <Minus size={18} aria-hidden="true" />
                     </button>
-                    <span className="min-w-[1.5rem] text-center font-bold tabular" aria-label={`${quantity} en la lista`}>{quantity}</span>
+                    <span className="min-w-[1.25rem] text-center font-bold tabular" aria-label={`${quantity} en la lista`}>{quantity}</span>
                     <button
                         type="button"
                         onClick={() => onAdd(item)}
                         aria-label={`Añadir una unidad de ${item.name}`}
-                        className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
+                        className="h-11 w-10 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
                     >
                         <Plus size={18} aria-hidden="true" />
                     </button>
