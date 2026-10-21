@@ -43,7 +43,7 @@ export default function useFavorites() {
                 if (!update) return favorite;
                 if (update.price === favorite.price && update.image === favorite.image
                     && update.packaging === favorite.packaging && update.unitPrice === favorite.unitPrice
-                    && update.name === favorite.name) return favorite;
+                    && update.name === favorite.name && update.isNew === favorite.isNew) return favorite;
                 changed = true;
                 return { ...favorite, ...update };
             });

@@ -8,7 +8,8 @@ export type listItem = {
     image?: string,
     mercadonaId?: string,
     packaging?: string,
-    unitPrice?: string
+    unitPrice?: string,
+    isNew?: boolean
 }
 
 
@@ -38,5 +39,7 @@ export type MercadonaProduct = {
     packaging: string,
     image: string,
     subcategory: string,
-    aisle: string
+    aisle: string,
+    // Novedad: marca de Mercadona o producto aparecido hace menos de 60 días (detectado por la app)
+    isNew?: boolean
 }

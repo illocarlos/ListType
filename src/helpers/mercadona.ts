@@ -205,6 +205,10 @@ function parseProduct(rawProduct: unknown, subcategory: string, aisle: string): 
     const size = unitSize !== null && sizeFormat ? `${unitSize.toLocaleString("es-ES")} ${sizeFormat}` : "";
     const packaging = [str(product.packaging), size].filter(Boolean).join(" ");
 
+    // Marca propia de Mercadona de producto nuevo (no da fecha de lanzamiento)
+    const badges = asObj(product.badges);
+    const isNew = priceInfo?.is_new === true || product.is_new === true || badges?.is_new === true;
+
     return {
         mercadonaId,
         name,
@@ -215,7 +219,63 @@ function parseProduct(rawProduct: unknown, subcategory: string, aisle: string): 
         image: safeImageUrl(product.thumbnail),
         subcategory,
         aisle,
+        isNew,
     };
+}
+
+// ---------- Novedades detectadas por la app ----------
+// Mercadona no publica la fecha de lanzamiento. La app apunta el día en que ve cada producto por primera vez
+// y el día en que vio cada pasillo por primera vez. Un producto que aparece en un pasillo ya conocido
+// es novedad durante NEW_DAYS días. Va en una clave aparte para que la limpieza de caché no la borre.
+
+const SEEN_PREFIX = "mercadona-seen:v1:";
+const NEW_DAYS = 60;
+
+type SeenStore = { aisles: Record<string, number>, products: Record<string, number> };
+
+const today = () => Math.floor(Date.now() / 86_400_000);
+
+function readSeen(wh: string): SeenStore {
+    try {
+        const raw = localStorage.getItem(`${SEEN_PREFIX}${wh}`);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (parsed && typeof parsed === "object" && parsed.aisles && parsed.products) return parsed as SeenStore;
+    } catch {
+        // dato corrupto: se empieza de cero
+    }
+    return { aisles: {}, products: {} };
+}
+
+function writeSeen(wh: string, store: SeenStore) {
+    try {
+        localStorage.setItem(`${SEEN_PREFIX}${wh}`, JSON.stringify(store));
+    } catch {
+        // sin espacio: se pierde solo la detección de novedades
+    }
+}
+
+// Apunta los productos vistos y marca como novedad los que han aparecido hace menos de NEW_DAYS días
+function markNewProducts(wh: string, aisleId: number, products: MercadonaProduct[]): MercadonaProduct[] {
+    const store = readSeen(wh);
+    const day = today();
+    const aisleKey = String(aisleId);
+    const firstVisit = store.aisles[aisleKey] === undefined;
+    if (firstVisit) store.aisles[aisleKey] = day;
+    const aisleBaseline = store.aisles[aisleKey];
+
+    let changed = firstVisit;
+    const marked = products.map(product => {
+        if (store.products[product.mercadonaId] === undefined) {
+            store.products[product.mercadonaId] = day;
+            changed = true;
+        }
+        const firstSeen = store.products[product.mercadonaId];
+        const appearedLater = firstSeen > aisleBaseline;
+        const recent = day - firstSeen <= NEW_DAYS;
+        return appearedLater && recent && !product.isNew ? { ...product, isNew: true } : product;
+    });
+    if (changed) writeSeen(wh, store);
+    return marked;
 }
 
 function parseAisle(json: unknown, aisleName: string): MercadonaProduct[] {
@@ -297,7 +357,7 @@ export async function fetchAisle(wh: string, aisleId: number, aisleName: string,
         if (cached) return cached;
     }
     try {
-        const products = parseAisle(await getJson(`categories/${aisleId}/`, wh), aisleName);
+        const products = markNewProducts(wh, aisleId, parseAisle(await getJson(`categories/${aisleId}/`, wh), aisleName));
         writeCache(key, products);
         return products;
     } catch (error) {
@@ -406,6 +466,7 @@ export function toListItem(product: MercadonaProduct): listItem {
         mercadonaId: product.mercadonaId,
         packaging: product.packaging || undefined,
         unitPrice: product.unitPrice || undefined,
+        isNew: product.isNew || undefined,
     };
 }
 

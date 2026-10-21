@@ -1,0 +1,17 @@
+{
+  "name": "Lista de la compra",
+  "short_name": "La compra",
+  "description": "Lista de la compra con los productos de Mercadona, favoritos y PDF.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f5f0",
+  "theme_color": "#1f4f31",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
