@@ -108,6 +108,72 @@ export async function resolvePostalCode(input: string): Promise<Zone> {
     return zone;
 }
 
+// ---------- Código postal desde la ubicación del móvil ----------
+
+export type LocationErrorReason = "unsupported" | "denied" | "unavailable" | "outside" | "not-found" | "connection";
+
+export class LocationError extends Error {
+    reason: LocationErrorReason;
+    constructor(reason: LocationErrorReason) {
+        const messages: Record<LocationErrorReason, string> = {
+            unsupported: "Este móvil no permite usar la ubicación. Escribe el código postal, por favor.",
+            denied: "No has dado permiso para usar tu ubicación. Puedes escribir el código postal.",
+            unavailable: "No se ha podido saber dónde estás. Escribe el código postal, por favor.",
+            outside: "Parece que no estás en España. Escribe el código postal de donde haces la compra.",
+            "not-found": "No hemos encontrado el código postal de tu ubicación. Escríbelo, por favor.",
+            connection: "No se ha podido comprobar tu ubicación. Revisa la conexión o escribe el código postal.",
+        };
+        super(messages[reason]);
+        this.reason = reason;
+    }
+}
+
+function currentPosition(): Promise<GeolocationPosition> {
+    return new Promise((resolve, reject) => {
+        if (!("geolocation" in navigator)) {
+            reject(new LocationError("unsupported"));
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(resolve, error => {
+            reject(new LocationError(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable"));
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5 * 60 * 1000 });
+    });
+}
+
+// Pide la ubicación (con permiso del usuario) y la convierte en código postal con OpenStreetMap, vía el proxy.
+// La ubicación no se guarda en ningún sitio.
+export async function postalCodeFromLocation(): Promise<string> {
+    const position = await currentPosition();
+    const params = new URLSearchParams({
+        path: "geo",
+        lat: position.coords.latitude.toFixed(3),
+        lon: position.coords.longitude.toFixed(3),
+    });
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE}?${params.toString()}`, { headers: { Accept: "application/json" } });
+    } catch {
+        throw new LocationError("connection");
+    }
+    if (response.status === 404) {
+        let error = "";
+        try {
+            error = String((await response.json()).error || "");
+        } catch {
+            error = "";
+        }
+        throw new LocationError(error === "outside_spain" ? "outside" : "not-found");
+    }
+    if (!response.ok) throw new LocationError("connection");
+    try {
+        const postalCode = String((await response.json()).pc || "");
+        if (/^\d{5}$/.test(postalCode)) return postalCode;
+    } catch {
+        // respuesta rara: se trata como no encontrado
+    }
+    throw new LocationError("not-found");
+}
+
 // ---------- Almacén ----------
 
 export function getWarehouse(): string {
