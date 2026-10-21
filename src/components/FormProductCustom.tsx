@@ -9,7 +9,7 @@ interface FormProps {
 }
 
 const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduct, createArrayItem, itemCategories }) => {
-    // Estados para almacenar el nombre y el precio del producto
+    // Estados para almacenar el nombre y la categoría del producto
     const [productName, setProductName] = useState<string>("");
     const [productType, setProductType] = useState<string>("");
 
@@ -35,17 +35,18 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
             name: productName.trim().replace(/[.;,]/g, "").toLowerCase(),
             price: 0,
             type: productType, // Usar el valor actual de productType
+            source: "manual",
         };
 
         if (newProduct.name.length < 2 || !newProduct.type) {
-            return alert("nita por favor el producto tiene que tener mas 3 tres letras y una categoria");
+            return alert("nita por favor, el producto tiene que tener al menos 2 letras y una categoría");
         }
 
         setShowNewProduct(false);
         addOtherItem(newProduct);
         createArrayItem(newProduct);
         setProductName("");
-        setProductType(" "); // Limpiar el estado productType después de enviar el formulario
+        setProductType(""); // Limpiar la categoría: el select es controlado y vuelve a "selecciona categoría"
 
     };
 
@@ -67,7 +68,8 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
                     />
                 </div>
 
-                <select name="productType" id="productType" onChange={handleTypeChange}>
+                <label className="sr-only" htmlFor="productType">Categoría</label>
+                <select name="productType" id="productType" value={productType} onChange={handleTypeChange}>
 
 
                     <option
