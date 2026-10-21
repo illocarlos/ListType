@@ -2,6 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import { captureInstallPrompt } from './helpers/install'
+
+// Antes de pintar la app: el navegador avisa de que se puede instalar muy pronto y no hay que perderlo
+captureInstallPrompt()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
