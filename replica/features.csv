@@ -1,0 +1,42 @@
+feature,area,priority,original,clone,notes
+Catálogo propio de productos por categorías (69 productos / 17 categorías),lista (actual),must,yes,yes,src/data/db.ts. Conservar
+Filtrar productos por categoría con botones,lista (actual),must,yes,partial,bug: tocar otra vez la categoría activa no vuelve a mostrar todo; el filtro mezcla el resultado anterior
+Añadir producto a la lista con un toque (+1 si ya está),lista (actual),must,yes,yes,addItem deduplica por id
+Crear producto a mano (nombre + categoría),alta manual (actual),must,yes,partial,bugs: select no se resetea; mensaje dice 3 letras y valida 2; circuito allItem/useEffect frágil
+Productos creados a mano persisten tras recargar,alta manual (actual),must,yes,partial,localStorage itemArrayNew; no aparecen en la rejilla hasta filtrar
+Lista persistente en localStorage,lista (actual),must,yes,yes,clave order. Formato debe seguir siendo compatible
+Cantidad por producto (Xn),cesta (actual),must,yes,yes,
+Subtotal por línea,cesta (actual),must,yes,yes,precios del catálogo propio son de relleno
+Total aproximado,cesta (actual),must,yes,partial,suma bien pero 54 de 69 productos valen 40 € de relleno
+Quitar producto de la lista,cesta (actual),must,yes,yes,quita la línea entera
+Estado vacío de la cesta,cesta (actual),must,yes,yes,"""no tienes ningun producto"""
+Descargar la lista en PDF,pdf (actual),must,yes,partial,requisito prioritario del usuario. Bug: más de ~25 líneas se salen del A4
+Botón PDF deshabilitado con lista vacía,pdf (actual),must,yes,yes,
+Diseño móvil con barra fija filtrar / ver cesta,lista (actual),must,yes,yes,
+Panel deslizante de alta manual,alta manual (actual),must,yes,yes,
+Navegar categorías de Mercadona (grupo > pasillo > subcategoría),catálogo Mercadona,must,yes,no,M02. Vía proxy Vercel
+Ver productos de Mercadona con foto nombre y precio,catálogo Mercadona,must,yes,no,M03
+Añadir producto de Mercadona a la lista guardando una copia,catálogo Mercadona,must,yes,no,copia en localStorage; la lista no depende de la API
+Precios del almacén de Sevilla,catálogo Mercadona,must,yes,no,M01. Código de almacén de La Rinconada sin verificar
+Mostrar foto y precio real en la cesta,cesta,must,yes,no,
+Precio por unidad de referencia (€/kg €/L €/ud),catálogo Mercadona,should,yes,no,M03
+Formato / envase / tamaño del producto,catálogo Mercadona,should,yes,no,M03
+Indicador de rebaja (precio anterior),catálogo Mercadona,could,yes,no,M03; solo si la API lo da
+Buscar productos de Mercadona por nombre,catálogo Mercadona,should,yes,no,M05; búsqueda local sobre lo cacheado
+Ficha de producto con foto grande y datos,catálogo Mercadona,could,yes,no,M04
+Restar una unidad (+/- por línea),cesta,should,yes,no,M06 lo tiene; ListType solo quita la línea entera
+Alérgenos e ingredientes,catálogo Mercadona,could,yes,no,M04; requiere petición de detalle por producto
+Mantener compatibles las claves order e itemArrayNew,datos,must,no,no,mejora propia: sin pérdida de datos al desplegar
+App funciona entera aunque Mercadona falle,datos,must,no,no,mejora propia: modo manual y catálogo propio siempre disponibles
+Caché perezosa por categoría con caducidad,datos,should,no,no,mejora propia: respeta rate limit y tamaño de localStorage
+PDF con salto de página,pdf,must,no,no,mejora propia
+PDF con precio por línea y total,pdf,should,no,no,mejora propia
+PDF con foto de cada producto,pdf,could,no,no,mejora propia; depende de CORS del CDN de imágenes
+Título de pestaña icono e idioma propios,marca,should,no,no,"hoy ""Vite + React + TS"", favicon roto, lang=en"
+Agrupar la lista por categoría / pasillo,cesta,could,no,no,mejora propia: más cómodo en la tienda física
+Comprar y pagar,tienda,could,yes,skip,no es una tienda
+Franjas de entrega y reparto,tienda,could,yes,skip,no es una tienda
+Cuenta de cliente y login,tienda,could,yes,skip,sin cuentas ni base de datos por decisión del usuario
+Búsqueda vía Algolia de Mercadona,catálogo Mercadona,should,yes,skip,usaría la clave incrustada en su frontend; se busca en local
+Marca y logo de Mercadona,marca,could,yes,skip,no se usa como identidad de la app
+Reseñas de productos,catálogo Mercadona,could,yes,skip,Mercadona no tiene
