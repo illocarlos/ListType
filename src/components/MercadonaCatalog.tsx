@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatCurrency } from "../helpers/formatPrice";
 import {
     fetchAisle,
     fetchGroups,
     getCachedProducts,
     getWarehouse,
+    indexAllAisles,
     MercadonaError,
     normalizeText,
     setWarehouse,
     toListItem,
 } from "../helpers/mercadona";
+import type { IndexProgress } from "../helpers/mercadona";
 import type { listItem, MercadonaAisle, MercadonaGroup, MercadonaProduct } from "../types/types";
 
 type MercadonaCatalogProps = {
@@ -17,6 +19,7 @@ type MercadonaCatalogProps = {
 }
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+type IndexState = "idle" | "running" | "done" | "stopped";
 
 const errorMessage = (error: unknown) =>
     error instanceof MercadonaError ? error.message : "No se ha podido cargar el catálogo de Mercadona.";
@@ -70,6 +73,12 @@ const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
     const [query, setQuery] = useState<string>("");
     const [lastAdded, setLastAdded] = useState<string | null>(null);
 
+    // Buscador: todos los productos cargados en memoria + carga de los pasillos que falten
+    const [searchPool, setSearchPool] = useState<Map<string, MercadonaProduct>>(() => new Map());
+    const [indexState, setIndexState] = useState<IndexState>("idle");
+    const [indexProgress, setIndexProgress] = useState<IndexProgress | null>(null);
+    const cancelledRef = useRef<boolean>(false);
+
     const loadGroups = useCallback(async (force = false) => {
         setGroupsState("loading");
         try {
@@ -84,6 +93,14 @@ const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
     useEffect(() => {
         loadGroups();
     }, [loadGroups]);
+
+    // Si se cierra el panel, se para la carga del buscador
+    useEffect(() => {
+        cancelledRef.current = false;
+        return () => {
+            cancelledRef.current = true;
+        };
+    }, []);
 
     const openAisle = async (selected: MercadonaAisle, force = false) => {
         setAisle(selected);
@@ -109,6 +126,35 @@ const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
         setLastAdded(product.mercadonaId);
     };
 
+    const startIndexing = useCallback(() => {
+        cancelledRef.current = false;
+        setSearchPool(new Map(getCachedProducts(wh).map(product => [product.mercadonaId, product])));
+        setIndexState("running");
+        indexAllAisles(
+            wh,
+            groups,
+            loaded => setSearchPool(previous => {
+                const next = new Map(previous);
+                for (const product of loaded) next.set(product.mercadonaId, product);
+                return next;
+            }),
+            setIndexProgress,
+            () => cancelledRef.current
+        ).then(result => {
+            if (cancelledRef.current) return;
+            setIndexState(result.done === result.total && result.failed === 0 ? "done" : "stopped");
+        });
+    }, [wh, groups]);
+
+    const isSearching = normalizeText(query.trim()).length >= 2;
+
+    // La primera búsqueda pone en marcha la carga del catálogo completo
+    useEffect(() => {
+        if (isSearching && groupsState === "ready" && indexState === "idle") {
+            startIndexing();
+        }
+    }, [isSearching, groupsState, indexState, startIndexing]);
+
     const handleSaveWarehouse = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!setWarehouse(whDraft)) {
@@ -116,25 +162,36 @@ const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
             return;
         }
         const clean = whDraft.trim().toLowerCase();
+        cancelledRef.current = true;
         setWh(clean);
         setWhDraft(clean);
         setShowWhEditor(false);
         setAisle(null);
         setProducts([]);
+        setSearchPool(new Map());
+        setIndexProgress(null);
+        setIndexState("idle");
     };
 
     const searchResults = useMemo(() => {
         const term = normalizeText(query.trim());
         if (term.length < 2) return [];
-        const seen = new Set<string>();
-        return [...products, ...getCachedProducts(wh)]
-            .filter(product => {
-                if (seen.has(product.mercadonaId)) return false;
-                seen.add(product.mercadonaId);
-                return normalizeText(product.name).includes(term);
-            })
-            .slice(0, 60);
-    }, [query, products, wh]);
+        const words = term.split(/\s+/).filter(Boolean);
+        const pool = new Map(searchPool);
+        for (const product of products) pool.set(product.mercadonaId, product);
+
+        const scored: { product: MercadonaProduct, score: number }[] = [];
+        for (const product of pool.values()) {
+            const name = normalizeText(product.name);
+            if (!words.every(word => name.includes(word))) continue;
+            const score = name.startsWith(term) ? 0 : name.includes(term) ? 1 : 2;
+            scored.push({ product, score });
+        }
+        return scored
+            .sort((a, b) => a.score - b.score || a.product.name.localeCompare(b.product.name, "es"))
+            .slice(0, 60)
+            .map(item => item.product);
+    }, [query, searchPool, products]);
 
     const productsBySubcategory = useMemo(() => {
         const sections = new Map<string, MercadonaProduct[]>();
@@ -146,7 +203,10 @@ const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
         return [...sections.entries()];
     }, [products]);
 
-    const isSearching = normalizeText(query.trim()).length >= 2;
+    const indexing = indexState === "running";
+    const progressPercent = indexProgress && indexProgress.total > 0
+        ? Math.round((indexProgress.done / indexProgress.total) * 100)
+        : 0;
 
     return (
         <section className="px-2 py-5" aria-label="Catálogo de Mercadona">
@@ -182,15 +242,50 @@ const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
                 type="search"
                 value={query}
                 onChange={event => setQuery(event.target.value)}
-                placeholder="Buscar en los pasillos que ya has abierto"
+                placeholder="Buscar en Mercadona"
                 className="w-full border-2 border-emerald-600 p-2 mb-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
             />
 
             {isSearching ? (
                 <div>
+                    {groupsState === "loading" && <p className="text-center text-sm mb-3">Cargando pasillos…</p>}
+
+                    {groupsState === "error" && (
+                        <div className="text-center mb-4">
+                            <p className="mb-3">{groupsError}</p>
+                            <button type="button" className="bg-emerald-200 p-2 font-extrabold" onClick={() => loadGroups(true)}>
+                                Reintentar
+                            </button>
+                        </div>
+                    )}
+
+                    {indexing && indexProgress && (
+                        <div className="mb-4" role="status" aria-live="polite">
+                            <p className="text-xs text-gray-600 mb-1">
+                                Preparando el buscador: {indexProgress.done} de {indexProgress.total} pasillos. Solo pasa una vez al día.
+                            </p>
+                            <div className="h-2 w-full bg-emerald-100">
+                                <div className="h-2 bg-emerald-600 transition-all" style={{ width: `${progressPercent}%` }} />
+                            </div>
+                        </div>
+                    )}
+
+                    {indexState === "stopped" && indexProgress && (
+                        <div className="mb-4 text-xs text-gray-600 flex flex-row items-center justify-between gap-2">
+                            <span>
+                                No se han podido cargar {indexProgress.total - indexProgress.done + indexProgress.failed} pasillos: puede faltar algún producto.
+                            </span>
+                            <button type="button" className="underline flex-none" onClick={startIndexing}>
+                                reintentar
+                            </button>
+                        </div>
+                    )}
+
                     {searchResults.length === 0 ? (
                         <p className="text-center text-sm">
-                            No hay nada con ese nombre en los pasillos abiertos. Abre el pasillo donde esté y vuelve a buscar.
+                            {indexing || groupsState === "loading"
+                                ? "Buscando…"
+                                : `No hay nada en Mercadona que coincida con «${query.trim()}».`}
                         </p>
                     ) : (
                         <div className="grid grid-cols-2 gap-3">

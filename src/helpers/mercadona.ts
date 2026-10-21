@@ -277,7 +277,64 @@ export async function fetchAisle(wh: string, aisleId: number, aisleName: string,
     }
 }
 
-// Todos los productos de los pasillos ya abiertos (para la búsqueda local)
+function isAisleCached(wh: string, aisleId: number): boolean {
+    return readCache<MercadonaProduct[]>(`${CACHE_PREFIX}${wh}:cat:${aisleId}`) !== null;
+}
+
+const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
+
+export type IndexProgress = { done: number, total: number, failed: number };
+
+// Carga todos los pasillos que falten en caché para que el buscador encuentre cualquier producto.
+// De dos en dos y con pausa entre peticiones; reintenta una vez los 429/5xx y para tras 3 fallos seguidos.
+export async function indexAllAisles(
+    wh: string,
+    groups: MercadonaGroup[],
+    onAisle: (products: MercadonaProduct[]) => void,
+    onProgress: (progress: IndexProgress) => void,
+    isCancelled: () => boolean
+): Promise<IndexProgress> {
+    const aisles = groups.flatMap(group => group.aisles);
+    const pending = aisles.filter(aisle => !isAisleCached(wh, aisle.id));
+    const progress: IndexProgress = { done: aisles.length - pending.length, total: aisles.length, failed: 0 };
+    onProgress({ ...progress });
+
+    let next = 0;
+    let consecutiveFailures = 0;
+
+    const worker = async () => {
+        while (next < pending.length && consecutiveFailures < 3 && !isCancelled()) {
+            const aisle = pending[next++];
+            let products: MercadonaProduct[] | null = null;
+            for (let attempt = 0; attempt < 2 && products === null && !isCancelled(); attempt++) {
+                try {
+                    products = await fetchAisle(wh, aisle.id, aisle.name);
+                } catch (error) {
+                    const retryable = error instanceof MercadonaError
+                        && (error.status === 429 || error.status === 0 || error.status >= 500);
+                    if (attempt === 0 && retryable) await wait(3000);
+                    else break;
+                }
+            }
+            if (isCancelled()) return;
+            if (products) {
+                consecutiveFailures = 0;
+                onAisle(products);
+            } else {
+                consecutiveFailures++;
+                progress.failed++;
+            }
+            progress.done++;
+            onProgress({ ...progress });
+            await wait(250);
+        }
+    };
+
+    await Promise.all([worker(), worker()]);
+    return { ...progress };
+}
+
+// Todos los productos de los pasillos ya cargados (para el buscador)
 export function getCachedProducts(wh: string): MercadonaProduct[] {
     const prefix = `${CACHE_PREFIX}${wh}:cat:`;
     const all: MercadonaProduct[] = [];
