@@ -3,12 +3,15 @@ import {
     fetchGroups,
     getCachedProducts,
     getWarehouse,
+    getZone,
     indexAllAisles,
     MercadonaError,
     normalizeText,
+    resolvePostalCode,
     setWarehouse,
+    ZoneError,
 } from "../helpers/mercadona";
-import type { IndexProgress } from "../helpers/mercadona";
+import type { IndexProgress, Zone } from "../helpers/mercadona";
 import type { MercadonaGroup, MercadonaProduct } from "../types/types";
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
@@ -94,14 +97,28 @@ export default function useMercadona() {
         }
     }, [groupsState, loadGroups, startIndex]);
 
-    const changeWarehouse = useCallback((code: string): boolean => {
-        if (!setWarehouse(code)) return false;
+    const [zone, setZone] = useState<Zone | null>(() => getZone());
+
+    const applyWarehouse = useCallback((code: string) => {
+        if (!setWarehouse(code)) return;
         runRef.current++;
         setIndexState("idle");
         setIndexProgress(null);
         setWh(code.trim().toLowerCase());
-        return true;
     }, []);
+
+    // El usuario escribe su código postal; la app averigua el almacén y recarga los precios de su zona.
+    // Devuelve el mensaje de error para enseñarlo, o null si ha ido bien.
+    const changePostalCode = useCallback(async (postalCode: string): Promise<string | null> => {
+        try {
+            const resolved = await resolvePostalCode(postalCode);
+            setZone(resolved);
+            applyWarehouse(resolved.wh);
+            return null;
+        } catch (error) {
+            return error instanceof ZoneError ? error.message : "No se ha podido comprobar el código postal.";
+        }
+    }, [applyWarehouse]);
 
     // Lista preparada para buscar: nombre normalizado una sola vez
     const searchable = useMemo<SearchableProduct[]>(
@@ -111,7 +128,8 @@ export default function useMercadona() {
 
     return {
         wh,
-        changeWarehouse,
+        zone,
+        changePostalCode,
         groups,
         groupsState,
         groupsError,

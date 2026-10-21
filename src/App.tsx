@@ -18,9 +18,11 @@ import MercadonaCatalog from "./components/MercadonaCatalog.tsx"
 import ProductRow from "./components/ProductRow.tsx"
 import Sheet from "./components/Sheet.tsx"
 import InstallHint from "./components/InstallHint.tsx"
+import ZoneCard from "./components/ZoneCard.tsx"
 
 type Source = "todo" | "favoritos" | "mercadona"
 type HomeTab = "favoritos" | "novedades" | "pasillos"
+const HOME_TABS: HomeTab[] = ["favoritos", "novedades", "pasillos"]
 
 const PAGE_SIZE = 40
 // En "Todo", cuántos favoritos se enseñan antes que los de Mercadona
@@ -177,6 +179,25 @@ function App() {
 
   const closeList = useCallback(() => setListOpen(false), []);
 
+  // Pestañas: flechas izquierda/derecha, Inicio y Fin (patrón estándar de pestañas)
+  const handleTabKeys = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const index = HOME_TABS.indexOf(homeTab);
+    const next = event.key === "ArrowRight" ? (index + 1) % HOME_TABS.length
+      : event.key === "ArrowLeft" ? (index + HOME_TABS.length - 1) % HOME_TABS.length
+      : event.key === "Home" ? 0
+      : event.key === "End" ? HOME_TABS.length - 1
+      : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    setHomeTab(HOME_TABS[next]);
+    document.getElementById(`tab-${HOME_TABS[next]}`)?.focus();
+  };
+
+  // Lo que oye quien usa lector de pantalla al buscar
+  const resultsAnnouncement = !searching ? ""
+    : noResults ? (loadingCatalog ? "Buscando…" : "No hay resultados")
+    : `${(showFavorites ? favoriteResults.length : 0) + (showMercadona ? mercadonaResults.length : 0)} resultados`;
+
   const missingAisles = mercadona.indexProgress
     ? mercadona.indexProgress.total - mercadona.indexProgress.done + mercadona.indexProgress.failed
     : 0;
@@ -210,7 +231,7 @@ function App() {
 
       {mercadona.indexState === "running" && mercadona.indexProgress && (
         <div className="mb-4" role="status" aria-live="polite">
-          <p className="text-xs text-muted mb-1.5">
+          <p className="text-sm text-muted mb-1.5">
             Cargando productos de Mercadona: {mercadona.indexProgress.done} de {mercadona.indexProgress.total} pasillos. Solo la primera vez al día.
           </p>
           <div className="h-1.5 w-full rounded-pill bg-surface-sunk overflow-hidden">
@@ -224,10 +245,10 @@ function App() {
 
       {mercadona.indexState === "stopped" && mercadona.indexProgress && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-surface p-3" role="status">
-          <p className="text-xs text-muted">
+          <p className="text-sm text-muted">
             {missingAisles === 1 ? "Falta 1 pasillo" : `Faltan ${missingAisles} pasillos`} por cargar: puede faltar algún producto.
           </p>
-          <button type="button" onClick={mercadona.retry} className="flex-none h-9 px-3 rounded-md bg-accent-soft text-on-accent-soft text-sm font-semibold">
+          <button type="button" onClick={mercadona.retry} className="flex-none h-11 px-4 rounded-md bg-accent-soft text-on-accent-soft text-base font-semibold">
             Reintentar
           </button>
         </div>
@@ -241,7 +262,7 @@ function App() {
       type="button"
       aria-pressed={source === value}
       onClick={() => setSource(value)}
-      className={`flex-none h-9 px-4 rounded-pill border text-sm font-medium transition-colors duration-200 ${source === value
+      className={`flex-none h-11 px-4 rounded-pill border text-base font-medium transition-colors duration-200 ${source === value
         ? "bg-accent border-accent text-on-accent"
         : "bg-surface border-border hover:border-accent"}`}
     >
@@ -304,7 +325,7 @@ function App() {
                   type="button"
                   onClick={clearSearch}
                   aria-label="Borrar búsqueda"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 grid place-items-center rounded-full text-muted hover:bg-surface-sunk"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 h-11 w-11 grid place-items-center rounded-full text-muted hover:bg-surface-sunk"
                 >
                   <X size={18} aria-hidden="true" />
                 </button>
@@ -316,6 +337,7 @@ function App() {
 
       <div className="mx-auto max-w-content px-4 md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-8">
         <main className="pt-4 pb-32 md:pb-12">
+          <p role="status" aria-live="polite" className="sr-only">{resultsAnnouncement}</p>
           {searching ? (
             <div>
               <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto" role="group" aria-label="Dónde buscar">
@@ -392,10 +414,11 @@ function App() {
             </div>
           ) : (
             <div>
+              <ZoneCard zone={mercadona.zone} onChange={mercadona.changePostalCode} />
               <InstallHint />
 
               {/* Pestañas de la portada */}
-              <div role="tablist" aria-label="Secciones" className="mb-5 grid grid-cols-3 gap-1 rounded-md bg-surface-sunk p-1">
+              <div role="tablist" aria-label="Secciones" onKeyDown={handleTabKeys} className="mb-5 grid grid-cols-3 gap-1 rounded-md bg-surface-sunk p-1">
                 {([
                   ["favoritos", "Favoritos", favorites.length],
                   ["novedades", "Novedades", novelties.length],
@@ -407,15 +430,16 @@ function App() {
                     role="tab"
                     id={`tab-${value}`}
                     aria-selected={homeTab === value}
-                    aria-controls={`panel-${value}`}
+                    aria-controls={homeTab === value ? `panel-${value}` : undefined}
+                    tabIndex={homeTab === value ? 0 : -1}
                     onClick={() => setHomeTab(value)}
-                    className={`h-10 rounded-sm text-sm font-semibold transition-colors duration-200 ${homeTab === value
+                    className={`h-11 rounded-sm text-base font-semibold transition-colors duration-200 ${homeTab === value
                       ? "bg-surface text-text shadow-sm"
                       : "text-muted hover:text-text"}`}
                   >
                     {label}
                     {count !== undefined && count > 0 && (
-                      <span className={`ml-1.5 tabular text-xs ${value === "novedades" ? "rounded-pill bg-highlight text-on-highlight px-1.5 py-0.5" : ""}`}>{count}</span>
+                      <span className={`ml-1.5 tabular text-sm ${value === "novedades" ? "rounded-pill bg-highlight text-on-highlight px-1.5" : ""}`}>{count}</span>
                     )}
                   </button>
                 ))}
@@ -427,7 +451,7 @@ function App() {
                     <h2 className="text-lg font-bold">Novedades de Mercadona</h2>
                     {novelties.length > 0 && <span className="text-sm text-muted tabular">{novelties.length}</span>}
                   </div>
-                  <p className="text-xs text-muted mb-4">
+                  <p className="text-sm text-muted mb-4">
                     Productos que Mercadona marca como nuevos o que han aparecido en los últimos 60 días.
                   </p>
 
@@ -520,7 +544,6 @@ function App() {
                 groupsState={mercadona.groupsState}
                 groupsError={mercadona.groupsError}
                 onRetryGroups={mercadona.retry}
-                onChangeWarehouse={mercadona.changeWarehouse}
                 quantityOf={quantityOf}
                 onAdd={addItem}
                 onDecrease={decreaseFromResults}
@@ -547,15 +570,14 @@ function App() {
           type="button"
           onClick={() => setListOpen(true)}
           className="w-full h-14 flex items-center gap-3 rounded-md bg-accent px-4 text-on-accent"
-          aria-label={`Ver lista: ${lineCount} productos, ${formatCurrency(total)}`}
         >
           <span className="relative">
             <ShoppingBasket size={24} aria-hidden="true" />
-            <span className="absolute -top-2 -right-3 min-w-[22px] h-[22px] px-1 rounded-pill bg-highlight text-on-highlight text-xs font-bold grid place-items-center tabular">
+            <span aria-hidden="true" className="absolute -top-2.5 -right-3.5 min-w-[24px] h-[24px] px-1 rounded-pill bg-highlight text-on-highlight text-sm font-bold grid place-items-center tabular">
               {lineCount}
             </span>
           </span>
-          <span className="ml-3 font-semibold">Ver lista</span>
+          <span className="ml-3 font-semibold">Ver lista<span className="sr-only">, {lineCount} {lineCount === 1 ? "producto" : "productos"},</span></span>
           <span className="ml-auto text-lg font-extrabold tabular">{formatCurrency(total)}</span>
         </button>
       </div>
