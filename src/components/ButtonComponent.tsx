@@ -4,19 +4,16 @@ type ListButtonProps = {
     filterFunction: (filteredItems: string) => void
 };
 
+// Chip de categoría del catálogo propio. El estado activo lo lleva App: solo hay una marcada a la vez
 const ButtonComponent = ({ filterFunction, type, isActive }: ListButtonProps) => {
-
-    // El estado activo lo lleva App: así solo hay una categoría marcada a la vez
-    const handleClick = () => {
-        filterFunction(type);
-    };
-
     return (
         <button
-            className={`uppercase border-b-4 mx-3 border-black ${isActive ? 'border-green-500 transition-all duration-300 ease-in-out' : 'transition-all duration-700 ease-in-out'}`}
-            style={{ backgroundPosition: isActive ? '0 100%' : '100% 100%' }}
+            type="button"
             aria-pressed={isActive}
-            onClick={handleClick}
+            onClick={() => filterFunction(type)}
+            className={`flex-none h-9 px-4 rounded-pill border text-sm font-medium capitalize transition-colors duration-200 ${isActive
+                ? "bg-accent border-accent text-on-accent"
+                : "bg-surface border-border text-text hover:border-accent"}`}
         >
             {type}
         </button>

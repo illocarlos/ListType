@@ -1,106 +1,35 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatCurrency } from "../helpers/formatPrice";
-import {
-    fetchAisle,
-    fetchGroups,
-    getCachedProducts,
-    getWarehouse,
-    indexAllAisles,
-    MercadonaError,
-    normalizeText,
-    setWarehouse,
-    toListItem,
-} from "../helpers/mercadona";
-import type { IndexProgress } from "../helpers/mercadona";
+import { useMemo, useState } from "react";
+import { ChevronDown, ChevronLeft, RefreshCw } from "lucide-react";
+import { fetchAisle, MercadonaError, mercadonaDetail, toListItem } from "../helpers/mercadona";
+import type { LoadState } from "../hooks/useMercadona";
 import type { listItem, MercadonaAisle, MercadonaGroup, MercadonaProduct } from "../types/types";
+import ProductRow from "./ProductRow";
 
 type MercadonaCatalogProps = {
-    onAdd: (item: listItem) => void
+    wh: string,
+    groups: MercadonaGroup[],
+    groupsState: LoadState,
+    groupsError: string,
+    onRetryGroups: () => void,
+    onChangeWarehouse: (code: string) => boolean,
+    quantityOf: (id: number) => number,
+    onAdd: (item: listItem) => void,
+    onDecrease: (item: listItem) => void,
 }
 
-type LoadState = "idle" | "loading" | "ready" | "error";
-type IndexState = "idle" | "running" | "done" | "stopped";
-
 const errorMessage = (error: unknown) =>
-    error instanceof MercadonaError ? error.message : "No se ha podido cargar el catálogo de Mercadona.";
+    error instanceof MercadonaError ? error.message : "No se ha podido cargar el pasillo.";
 
-const ProductCard = ({ product, onAdd, justAdded }: { product: MercadonaProduct, onAdd: (product: MercadonaProduct) => void, justAdded: boolean }) => (
-    <button
-        type="button"
-        onClick={() => onAdd(product)}
-        className={`relative flex flex-col items-center text-center rounded-sm border-2 p-2 transition-all ease-linear focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${justAdded ? "border-emerald-600 bg-emerald-100" : "border-teal-500 hover:bg-teal-200"}`}
-    >
-        {product.image ? (
-            <img
-                src={product.image}
-                alt={product.name}
-                loading="lazy"
-                className="h-24 w-24 object-contain bg-white"
-            />
-        ) : (
-            <div className="h-24 w-24 bg-gray-100" aria-hidden="true" />
-        )}
-        <span className="mt-1 text-sm font-extrabold uppercase leading-tight line-clamp-2">{product.name}</span>
-        {product.packaging && <span className="text-xs text-gray-600">{product.packaging}</span>}
-        <span className="mt-1 text-base font-extrabold text-emerald-900">
-            {formatCurrency(product.price)}
-            {product.previousPrice !== null && (
-                <span className="ml-1 text-xs font-normal text-gray-500 line-through">{formatCurrency(product.previousPrice)}</span>
-            )}
-        </span>
-        {product.unitPrice && <span className="text-xs text-gray-600">{product.unitPrice}</span>}
-        {justAdded && (
-            <span className="absolute top-1 right-1 rounded-full bg-emerald-600 px-2 text-xs font-bold text-white">añadido</span>
-        )}
-    </button>
-);
-
-const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
-    const [wh, setWh] = useState<string>(() => getWarehouse());
-    const [whDraft, setWhDraft] = useState<string>(wh);
-    const [showWhEditor, setShowWhEditor] = useState<boolean>(false);
-
-    const [groups, setGroups] = useState<MercadonaGroup[]>([]);
-    const [groupsState, setGroupsState] = useState<LoadState>("idle");
-    const [groupsError, setGroupsError] = useState<string>("");
+// Explorar Mercadona por pasillos (alternativa al buscador)
+const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups, onChangeWarehouse, quantityOf, onAdd, onDecrease }: MercadonaCatalogProps) => {
     const [openGroupId, setOpenGroupId] = useState<number | null>(null);
-
     const [aisle, setAisle] = useState<MercadonaAisle | null>(null);
     const [products, setProducts] = useState<MercadonaProduct[]>([]);
     const [productsState, setProductsState] = useState<LoadState>("idle");
     const [productsError, setProductsError] = useState<string>("");
-
-    const [query, setQuery] = useState<string>("");
-    const [lastAdded, setLastAdded] = useState<string | null>(null);
-
-    // Buscador: todos los productos cargados en memoria + carga de los pasillos que falten
-    const [searchPool, setSearchPool] = useState<Map<string, MercadonaProduct>>(() => new Map());
-    const [indexState, setIndexState] = useState<IndexState>("idle");
-    const [indexProgress, setIndexProgress] = useState<IndexProgress | null>(null);
-    const cancelledRef = useRef<boolean>(false);
-
-    const loadGroups = useCallback(async (force = false) => {
-        setGroupsState("loading");
-        try {
-            setGroups(await fetchGroups(wh, force));
-            setGroupsState("ready");
-        } catch (error) {
-            setGroupsError(errorMessage(error));
-            setGroupsState("error");
-        }
-    }, [wh]);
-
-    useEffect(() => {
-        loadGroups();
-    }, [loadGroups]);
-
-    // Si se cierra el panel, se para la carga del buscador
-    useEffect(() => {
-        cancelledRef.current = false;
-        return () => {
-            cancelledRef.current = true;
-        };
-    }, []);
+    const [editingWh, setEditingWh] = useState<boolean>(false);
+    const [whDraft, setWhDraft] = useState<string>(wh);
+    const [whError, setWhError] = useState<string>("");
 
     const openAisle = async (selected: MercadonaAisle, force = false) => {
         setAisle(selected);
@@ -115,289 +44,158 @@ const MercadonaCatalog = ({ onAdd }: MercadonaCatalogProps) => {
         }
     };
 
-    useEffect(() => {
-        if (!lastAdded) return;
-        const timer = window.setTimeout(() => setLastAdded(null), 1200);
-        return () => window.clearTimeout(timer);
-    }, [lastAdded]);
-
-    const handleAdd = (product: MercadonaProduct) => {
-        onAdd(toListItem(product));
-        setLastAdded(product.mercadonaId);
-    };
-
-    const startIndexing = useCallback(() => {
-        cancelledRef.current = false;
-        setSearchPool(new Map(getCachedProducts(wh).map(product => [product.mercadonaId, product])));
-        setIndexState("running");
-        indexAllAisles(
-            wh,
-            groups,
-            loaded => setSearchPool(previous => {
-                const next = new Map(previous);
-                for (const product of loaded) next.set(product.mercadonaId, product);
-                return next;
-            }),
-            setIndexProgress,
-            () => cancelledRef.current
-        ).then(result => {
-            if (cancelledRef.current) return;
-            setIndexState(result.done === result.total && result.failed === 0 ? "done" : "stopped");
-        });
-    }, [wh, groups]);
-
-    const isSearching = normalizeText(query.trim()).length >= 2;
-
-    // La primera búsqueda pone en marcha la carga del catálogo completo
-    useEffect(() => {
-        if (isSearching && groupsState === "ready" && indexState === "idle") {
-            startIndexing();
-        }
-    }, [isSearching, groupsState, indexState, startIndexing]);
-
-    const handleSaveWarehouse = (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!setWarehouse(whDraft)) {
-            alert("El código de almacén solo puede llevar letras y números (por ejemplo: svq1).");
-            return;
-        }
-        const clean = whDraft.trim().toLowerCase();
-        cancelledRef.current = true;
-        setWh(clean);
-        setWhDraft(clean);
-        setShowWhEditor(false);
-        setAisle(null);
-        setProducts([]);
-        setSearchPool(new Map());
-        setIndexProgress(null);
-        setIndexState("idle");
-    };
-
-    const searchResults = useMemo(() => {
-        const term = normalizeText(query.trim());
-        if (term.length < 2) return [];
-        const words = term.split(/\s+/).filter(Boolean);
-        const pool = new Map(searchPool);
-        for (const product of products) pool.set(product.mercadonaId, product);
-
-        const scored: { product: MercadonaProduct, score: number }[] = [];
-        for (const product of pool.values()) {
-            const name = normalizeText(product.name);
-            if (!words.every(word => name.includes(word))) continue;
-            const score = name.startsWith(term) ? 0 : name.includes(term) ? 1 : 2;
-            scored.push({ product, score });
-        }
-        return scored
-            .sort((a, b) => a.score - b.score || a.product.name.localeCompare(b.product.name, "es"))
-            .slice(0, 60)
-            .map(item => item.product);
-    }, [query, searchPool, products]);
-
-    const productsBySubcategory = useMemo(() => {
-        const sections = new Map<string, MercadonaProduct[]>();
+    const sections = useMemo(() => {
+        const map = new Map<string, MercadonaProduct[]>();
         for (const product of products) {
-            const list = sections.get(product.subcategory) ?? [];
+            const list = map.get(product.subcategory) ?? [];
             list.push(product);
-            sections.set(product.subcategory, list);
+            map.set(product.subcategory, list);
         }
-        return [...sections.entries()];
+        return [...map.entries()];
     }, [products]);
 
-    const indexing = indexState === "running";
-    const progressPercent = indexProgress && indexProgress.total > 0
-        ? Math.round((indexProgress.done / indexProgress.total) * 100)
-        : 0;
+    const saveWarehouse = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!onChangeWarehouse(whDraft)) {
+            setWhError("Solo letras y números, por ejemplo svq1.");
+            return;
+        }
+        setWhError("");
+        setEditingWh(false);
+        setAisle(null);
+        setProducts([]);
+    };
 
     return (
-        <section className="px-2 py-5" aria-label="Catálogo de Mercadona">
-
-            <div className="flex flex-row items-center justify-between text-xs text-gray-600 mb-3">
-                <span>Precios del almacén <strong className="uppercase">{wh}</strong></span>
-                <button
-                    type="button"
-                    className="underline"
-                    onClick={() => setShowWhEditor(!showWhEditor)}
-                >
-                    {showWhEditor ? "cerrar" : "cambiar"}
+        <section aria-labelledby="explore-title" className="mt-8">
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+                <h2 id="explore-title" className="text-lg font-bold">Pasillos de Mercadona</h2>
+                <button type="button" className="text-sm text-accent underline underline-offset-2" onClick={() => setEditingWh(!editingWh)}>
+                    Almacén {wh.toUpperCase()}
                 </button>
             </div>
 
-            {showWhEditor && (
-                <form onSubmit={handleSaveWarehouse} className="flex flex-row gap-2 mb-4">
-                    <label className="sr-only" htmlFor="warehouse">Código de almacén</label>
-                    <input
-                        id="warehouse"
-                        value={whDraft}
-                        onChange={event => setWhDraft(event.target.value)}
-                        className="flex-1 border-b-2 border-emerald-600 focus:outline-none"
-                        placeholder="svq1"
-                    />
-                    <button type="submit" className="bg-emerald-400 px-3 text-sm font-bold">Guardar</button>
+            {editingWh && (
+                <form onSubmit={saveWarehouse} className="mb-4 rounded-md bg-surface p-3 flex flex-col gap-2">
+                    <label htmlFor="warehouse" className="text-sm font-semibold">Código de almacén (decide los precios)</label>
+                    <div className="flex gap-2">
+                        <input
+                            id="warehouse"
+                            value={whDraft}
+                            onChange={event => setWhDraft(event.target.value)}
+                            className="h-11 flex-1 rounded-md border-2 border-border-input px-3 focus:border-accent focus:outline-none"
+                        />
+                        <button type="submit" className="h-11 px-4 rounded-md bg-accent text-on-accent font-semibold">Guardar</button>
+                    </div>
+                    {whError && <p role="alert" className="text-sm text-danger">{whError}</p>}
                 </form>
             )}
 
-            <label className="sr-only" htmlFor="mercadonaSearch">Buscar en Mercadona</label>
-            <input
-                id="mercadonaSearch"
-                type="search"
-                value={query}
-                onChange={event => setQuery(event.target.value)}
-                placeholder="Buscar en Mercadona"
-                className="w-full border-2 border-emerald-600 p-2 mb-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
-            />
-
-            {isSearching ? (
+            {aisle ? (
                 <div>
-                    {groupsState === "loading" && <p className="text-center text-sm mb-3">Cargando pasillos…</p>}
-
-                    {groupsState === "error" && (
-                        <div className="text-center mb-4">
-                            <p className="mb-3">{groupsError}</p>
-                            <button type="button" className="bg-emerald-200 p-2 font-extrabold" onClick={() => loadGroups(true)}>
-                                Reintentar
-                            </button>
-                        </div>
-                    )}
-
-                    {indexing && indexProgress && (
-                        <div className="mb-4" role="status" aria-live="polite">
-                            <p className="text-xs text-gray-600 mb-1">
-                                Preparando el buscador: {indexProgress.done} de {indexProgress.total} pasillos. Solo pasa una vez al día.
-                            </p>
-                            <div className="h-2 w-full bg-emerald-100">
-                                <div className="h-2 bg-emerald-600 transition-all" style={{ width: `${progressPercent}%` }} />
-                            </div>
-                        </div>
-                    )}
-
-                    {indexState === "stopped" && indexProgress && (
-                        <div className="mb-4 text-xs text-gray-600 flex flex-row items-center justify-between gap-2">
-                            <span>
-                                No se han podido cargar {indexProgress.total - indexProgress.done + indexProgress.failed} pasillos: puede faltar algún producto.
-                            </span>
-                            <button type="button" className="underline flex-none" onClick={startIndexing}>
-                                reintentar
-                            </button>
-                        </div>
-                    )}
-
-                    {searchResults.length === 0 ? (
-                        <p className="text-center text-sm">
-                            {indexing || groupsState === "loading"
-                                ? "Buscando…"
-                                : `No hay nada en Mercadona que coincida con «${query.trim()}».`}
-                        </p>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-3">
-                            {searchResults.map(product => (
-                                <ProductCard
-                                    key={product.mercadonaId}
-                                    product={product}
-                                    onAdd={handleAdd}
-                                    justAdded={lastAdded === product.mercadonaId}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
-            ) : aisle ? (
-                <div>
-                    <div className="flex flex-row items-center justify-between mb-4">
-                        <button
-                            type="button"
-                            onClick={() => { setAisle(null); setProducts([]); }}
-                            className="uppercase font-extrabold text-sm"
-                        >
-                            ← pasillos
-                        </button>
-                        <h3 className="uppercase font-extrabold text-lg text-right">{aisle.name}</h3>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => { setAisle(null); setProducts([]); }}
+                        className="mb-3 inline-flex items-center gap-1 h-11 pr-3 text-sm font-semibold text-accent"
+                    >
+                        <ChevronLeft size={18} aria-hidden="true" /> Todos los pasillos
+                    </button>
+                    <h3 className="text-xl font-bold mb-3">{aisle.name}</h3>
 
                     {productsState === "loading" && (
-                        <div className="grid grid-cols-2 gap-3" aria-busy="true">
-                            {Array.from({ length: 6 }).map((_, index) => (
-                                <div key={index} className="h-48 animate-pulse bg-gray-100" />
+                        <ul className="space-y-2" aria-busy="true">
+                            {Array.from({ length: 5 }).map((_, index) => (
+                                <li key={index} className="h-[72px] rounded-md bg-surface-sunk animate-pulse" />
                             ))}
-                        </div>
+                        </ul>
                     )}
 
                     {productsState === "error" && (
-                        <div className="text-center">
-                            <p className="mb-3">{productsError}</p>
-                            <button type="button" className="bg-emerald-200 p-2 font-extrabold" onClick={() => openAisle(aisle, true)}>
-                                Reintentar
+                        <div className="rounded-md bg-surface p-4">
+                            <p className="text-sm">{productsError}</p>
+                            <button type="button" onClick={() => openAisle(aisle, true)} className="mt-3 inline-flex items-center gap-2 h-11 px-4 rounded-md bg-accent-soft text-on-accent-soft font-semibold">
+                                <RefreshCw size={16} aria-hidden="true" /> Reintentar
                             </button>
                         </div>
                     )}
 
                     {productsState === "ready" && products.length === 0 && (
-                        <p className="text-center">Este pasillo no tiene productos ahora mismo.</p>
+                        <p className="text-sm text-muted">Este pasillo no tiene productos ahora mismo.</p>
                     )}
 
-                    {productsState === "ready" && productsBySubcategory.map(([subcategory, list]) => (
+                    {productsState === "ready" && sections.map(([subcategory, list]) => (
                         <div key={subcategory} className="mb-6">
-                            <h4 className="uppercase font-bold text-sm border-b-2 border-emerald-400 mb-3">{subcategory}</h4>
-                            <div className="grid grid-cols-2 gap-3">
-                                {list.map(product => (
-                                    <ProductCard
-                                        key={product.mercadonaId}
-                                        product={product}
-                                        onAdd={handleAdd}
-                                        justAdded={lastAdded === product.mercadonaId}
-                                    />
-                                ))}
-                            </div>
+                            <h4 className="text-sm font-semibold text-muted mb-2">{subcategory}</h4>
+                            <ul className="space-y-2">
+                                {list.map(product => {
+                                    const item = toListItem(product);
+                                    return (
+                                        <ProductRow
+                                            key={product.mercadonaId}
+                                            item={item}
+                                            detail={mercadonaDetail(product)}
+                                            previousPrice={product.previousPrice}
+                                            quantity={quantityOf(item.id)}
+                                            onAdd={onAdd}
+                                            onDecrease={onDecrease}
+                                        />
+                                    );
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </div>
             ) : (
                 <div>
                     {groupsState === "loading" && (
-                        <div className="space-y-2" aria-busy="true">
-                            {Array.from({ length: 8 }).map((_, index) => (
-                                <div key={index} className="h-8 animate-pulse bg-gray-100" />
+                        <ul className="space-y-2" aria-busy="true">
+                            {Array.from({ length: 6 }).map((_, index) => (
+                                <li key={index} className="h-12 rounded-md bg-surface-sunk animate-pulse" />
                             ))}
-                        </div>
+                        </ul>
                     )}
 
                     {groupsState === "error" && (
-                        <div className="text-center">
-                            <p className="mb-3">{groupsError}</p>
-                            <button type="button" className="bg-emerald-200 p-2 font-extrabold" onClick={() => loadGroups(true)}>
-                                Reintentar
+                        <div className="rounded-md bg-surface p-4">
+                            <p className="text-sm">{groupsError}</p>
+                            <button type="button" onClick={onRetryGroups} className="mt-3 inline-flex items-center gap-2 h-11 px-4 rounded-md bg-accent-soft text-on-accent-soft font-semibold">
+                                <RefreshCw size={16} aria-hidden="true" /> Reintentar
                             </button>
                         </div>
                     )}
 
                     {groupsState === "ready" && (
-                        <ul className="divide-y-2 divide-emerald-100">
-                            {groups.map(group => (
-                                <li key={group.id}>
-                                    <button
-                                        type="button"
-                                        aria-expanded={openGroupId === group.id}
-                                        onClick={() => setOpenGroupId(openGroupId === group.id ? null : group.id)}
-                                        className="w-full flex flex-row justify-between py-2 uppercase font-extrabold text-left"
-                                    >
-                                        <span>{group.name}</span>
-                                        <span aria-hidden="true">{openGroupId === group.id ? "−" : "+"}</span>
-                                    </button>
-                                    {openGroupId === group.id && (
-                                        <div className="grid grid-cols-2 gap-2 pb-3">
-                                            {group.aisles.map(item => (
-                                                <button
-                                                    key={item.id}
-                                                    type="button"
-                                                    onClick={() => openAisle(item)}
-                                                    className="border-2 border-teal-500 p-2 text-sm uppercase hover:bg-teal-200 text-left"
-                                                >
-                                                    {item.name}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </li>
-                            ))}
+                        <ul className="rounded-md bg-surface divide-y divide-border">
+                            {groups.map(group => {
+                                const open = openGroupId === group.id;
+                                return (
+                                    <li key={group.id}>
+                                        <button
+                                            type="button"
+                                            aria-expanded={open}
+                                            onClick={() => setOpenGroupId(open ? null : group.id)}
+                                            className="w-full min-h-[48px] px-4 flex items-center justify-between gap-3 text-left font-semibold"
+                                        >
+                                            <span>{group.name}</span>
+                                            <ChevronDown size={18} aria-hidden="true" className={`flex-none transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+                                        </button>
+                                        {open && (
+                                            <div className="px-4 pb-4 flex flex-wrap gap-2">
+                                                {group.aisles.map(item => (
+                                                    <button
+                                                        key={item.id}
+                                                        type="button"
+                                                        onClick={() => openAisle(item)}
+                                                        className="h-9 px-4 rounded-pill border border-border bg-bg text-sm hover:border-accent"
+                                                    >
+                                                        {item.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     )}
                 </div>

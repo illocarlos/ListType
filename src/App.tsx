@@ -1,22 +1,30 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { Plus, RefreshCw, Search, ShoppingBasket, X } from "lucide-react"
 // base de dato interna en la misma aplicacion donde recogemos un array de objeto
 import { listItems } from "./data/db"
-// hook donde nos traemos el array relleno con los datos
+// hooks: la lista (localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
+import useMercadona from "./hooks/useMercadona"
+import type { SearchableProduct } from "./hooks/useMercadona"
 
-// archivo importante para diferenciar de typescript en el creamos objetos que vamos a utilizar
-//en bastantes lugares de la aplicacion pues los centralizamos en un archivo
 import type { listItem } from "./types/types"
-// component
-import ListItem from "./components/ListItem"
+import { formatCurrency } from "./helpers/formatPrice"
+import { mercadonaDetail, normalizeText, toListItem } from "./helpers/mercadona"
+// componentes
 import OrderTotal from "./components/OrderTotal.tsx"
 import ButtonComponent from './components/ButtonComponent.tsx'
 import ListOrder from "./components/ListOrder.tsx"
 import FormProductCustom from "./components/FormProductCustom.tsx"
 import ButtonPdf from "./components/ButtonPdf.tsx"
 import MercadonaCatalog from "./components/MercadonaCatalog.tsx"
+import ProductRow from "./components/ProductRow.tsx"
+import Sheet from "./components/Sheet.tsx"
 
-type CatalogTab = "propios" | "mercadona"
+type Source = "todo" | "propios" | "mercadona"
+
+const PAGE_SIZE = 40
+// En "Todo", cuántos productos propios se enseñan antes que los de Mercadona
+const OWN_PREVIEW = 5
 
 // Quita repetidos por nombre (el primero gana), igual que hacía el filtro original
 function uniqueByName(items: listItem[]) {
@@ -28,14 +36,31 @@ function uniqueByName(items: listItem[]) {
   });
 }
 
+// Coincide si están todas las palabras; primero lo que empieza por lo escrito
+function makeMatcher(term: string) {
+  const words = term.split(/\s+/).filter(Boolean);
+  const matches = (name: string) => words.every(word => name.includes(word));
+  const score = (name: string) => {
+    if (name.startsWith(term)) return 0;
+    if (name.split(/\s+/).some(word => word.startsWith(words[0] ?? ""))) return 1;
+    return 2;
+  };
+  return { matches, score };
+}
+
 function App() {
-  const [show, setshow] = useState<boolean>(false);
-  const [showNewProduct, setShowNewProduct] = useState<boolean>(false);
-  const [catalogTab, setCatalogTab] = useState<CatalogTab>("propios");
-
   const { order, addItem, decreaseItem, removeItem, addOtherItem } = useList();
+  const mercadona = useMercadona();
 
+  const [query, setQuery] = useState<string>("");
+  const deferredQuery = useDeferredValue(query);
+  const [source, setSource] = useState<Source>("todo");
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [selectedCheckbox, setSelectedCheckbox] = useState<string | null>(null);
+  const [showNewProduct, setShowNewProduct] = useState<boolean>(false);
+  const [newProductName, setNewProductName] = useState<string>("");
+  const [listOpen, setListOpen] = useState<boolean>(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
 
   // Productos creados a mano, persistidos en localStorage (misma clave y formato de siempre)
@@ -61,26 +86,69 @@ function App() {
   // Categorías del catálogo propio
   const itemCategories = useMemo(() => [...new Set(listItems.map(item => item.type))], []);
 
-  // Catálogo propio + productos creados a mano (también visibles nada más recargar)
+  // Catálogo propio + productos creados a mano
   const allOwnItems = useMemo(() => uniqueByName([...listItems, ...itemArrayNew]), [itemArrayNew]);
 
-  // Lo que se ve en la rejilla: todo, o solo la categoría elegida
+  // Rejilla de "mis productos" sin búsqueda: todo o la categoría elegida
   const filteredItems = useMemo(
     () => selectedCheckbox ? allOwnItems.filter(item => item.type === selectedCheckbox) : allOwnItems,
     [allOwnItems, selectedCheckbox]
   );
 
+  // Cantidad de cada producto en la lista, para pintar − n + en los resultados
+  const quantities = useMemo(() => new Map(order.map(item => [item.id, item.quantity])), [order]);
+  const quantityOf = useCallback((id: number) => quantities.get(id) ?? 0, [quantities]);
 
-  const showProduct = () => {
-    setshow(!show);
-    if (!show) {
-      setShowNewProduct(false);
-    }
+  const lineCount = order.length;
+  const total = useMemo(() => order.reduce((sum, item) => sum + item.price * item.quantity, 0), [order]);
+
+
+  // ---------- Buscador ----------
+
+  const term = normalizeText(deferredQuery.trim());
+  const searching = term.length > 0;
+
+  const ownResults = useMemo(() => {
+    if (!term) return [];
+    const { matches, score } = makeMatcher(term);
+    return allOwnItems
+      .map(item => ({ item, name: normalizeText(item.name) }))
+      .filter(entry => matches(entry.name))
+      .sort((a, b) => score(a.name) - score(b.name) || a.name.localeCompare(b.name, "es", { numeric: true }))
+      .map(entry => entry.item);
+  }, [term, allOwnItems]);
+
+  const mercadonaResults = useMemo<SearchableProduct[]>(() => {
+    if (!term) return [];
+    const { matches, score } = makeMatcher(term);
+    return mercadona.searchable
+      .filter(product => matches(product.searchName))
+      .sort((a, b) => score(a.searchName) - score(b.searchName) || a.searchName.localeCompare(b.searchName, "es", { numeric: true }));
+  }, [term, mercadona.searchable]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [term, source]);
+
+  const showOwn = source !== "mercadona";
+  const showMercadona = source !== "propios";
+  const loadingCatalog = mercadona.indexState === "running" || mercadona.groupsState === "loading";
+  const noResults = searching
+    && (!showOwn || ownResults.length === 0)
+    && (!showMercadona || mercadonaResults.length === 0);
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    if (value.trim()) mercadona.ensureIndex();
   };
 
-  const createProduct = () => {
-    setShowNewProduct(!showNewProduct);
+  const clearSearch = () => {
+    setQuery("");
+    searchRef.current?.focus();
   };
+
+
+  // ---------- Acciones ----------
 
   // Tocar una categoría filtra; tocar otra vez la misma vuelve a mostrar todo
   const filterFunction = (value: string) => {
@@ -96,107 +164,250 @@ function App() {
     });
   };
 
+  // En los resultados, "−" con 1 unidad quita el producto de la lista
+  const decreaseFromResults = (item: listItem) => {
+    if (quantityOf(item.id) > 1) decreaseItem(item.id);
+    else removeItem(item.id);
+  };
 
+  const openNewProduct = (name = "") => {
+    setNewProductName(name);
+    setShowNewProduct(true);
+  };
+
+  const closeNewProduct = useCallback(() => setShowNewProduct(false), []);
+  const closeList = useCallback(() => setListOpen(false), []);
+
+  const ownDetail = (item: listItem) => item.source === "manual" ? `${item.type} · creado por ti` : item.type;
+
+
+  // ---------- Piezas ----------
+
+  const missingAisles = mercadona.indexProgress
+    ? mercadona.indexProgress.total - mercadona.indexProgress.done + mercadona.indexProgress.failed
+    : 0;
+
+  const catalogStatus = (
+    <>
+      {mercadona.groupsState === "error" && (
+        <div className="rounded-md bg-surface p-4 mb-4" role="alert">
+          <p className="text-sm">{mercadona.groupsError}</p>
+          <button type="button" onClick={mercadona.retry} className="mt-3 inline-flex items-center gap-2 h-11 px-4 rounded-md bg-accent-soft text-on-accent-soft font-semibold">
+            <RefreshCw size={16} aria-hidden="true" /> Reintentar
+          </button>
+        </div>
+      )}
+
+      {mercadona.indexState === "running" && mercadona.indexProgress && (
+        <div className="mb-4" role="status" aria-live="polite">
+          <p className="text-xs text-muted mb-1.5">
+            Cargando productos de Mercadona: {mercadona.indexProgress.done} de {mercadona.indexProgress.total} pasillos. Solo la primera vez al día.
+          </p>
+          <div className="h-1.5 w-full rounded-pill bg-surface-sunk overflow-hidden">
+            <div
+              className="h-full bg-accent transition-all duration-200"
+              style={{ width: `${mercadona.indexProgress.total ? Math.round(mercadona.indexProgress.done / mercadona.indexProgress.total * 100) : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {mercadona.indexState === "stopped" && mercadona.indexProgress && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-surface p-3" role="status">
+          <p className="text-xs text-muted">
+            {missingAisles === 1 ? "Falta 1 pasillo" : `Faltan ${missingAisles} pasillos`} por cargar: puede faltar algún producto.
+          </p>
+          <button type="button" onClick={mercadona.retry} className="flex-none h-9 px-3 rounded-md bg-accent-soft text-on-accent-soft text-sm font-semibold">
+            Reintentar
+          </button>
+        </div>
+      )}
+    </>
+  );
+
+  const sourceChip = (value: Source, label: string, count?: number) => (
+    <button
+      key={value}
+      type="button"
+      aria-pressed={source === value}
+      onClick={() => setSource(value)}
+      className={`flex-none h-9 px-4 rounded-pill border text-sm font-medium transition-colors duration-200 ${source === value
+        ? "bg-accent border-accent text-on-accent"
+        : "bg-surface border-border hover:border-accent"}`}
+    >
+      {label}{count !== undefined && <span className="ml-1.5 tabular opacity-80">{count}</span>}
+    </button>
+  );
+
+  const listPanel = (withHeader: boolean) => (
+    <div className="flex h-full flex-col bg-surface">
+      {withHeader && (
+        <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-border">
+          <h2 className="text-lg font-bold">Tu lista</h2>
+          <span className="text-sm text-muted tabular">{lineCount} {lineCount === 1 ? "producto" : "productos"}</span>
+        </div>
+      )}
+      <div className="flex-1 overflow-y-auto">
+        <ListOrder
+          order={order}
+          addItem={addItem}
+          decreaseItem={decreaseItem}
+          removeItem={removeItem}
+        />
+      </div>
+      <div className="border-t border-border p-4 space-y-3 safe-bottom">
+        <OrderTotal order={order} />
+        <ButtonPdf order={order} />
+      </div>
+    </div>
+  );
 
 
   return (
-    <>
-      <header
-        className=" bg-emerald-600 py-3"
-      >
-        <h1
-          className="text-white text-4xl text-center font-bold uppercase"
-        >Lista de la compra</h1>
+    <div className="min-h-screen">
+      {/* Cabecera con el buscador: lo primero y siempre a mano */}
+      <header className="sticky top-0 z-30 bg-accent-strong text-on-accent">
+        <div className="mx-auto max-w-content px-4">
+          <div className="flex h-14 items-center justify-between">
+            <h1 className="text-xl font-extrabold tracking-tight">Lista de la compra</h1>
+          </div>
+          <div className="pb-3 md:pr-[412px]">
+            <label htmlFor="search" className="sr-only">Buscar productos</label>
+            <div className="relative">
+              <Search size={20} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                ref={searchRef}
+                id="search"
+                type="search"
+                inputMode="search"
+                autoComplete="off"
+                enterKeyHint="search"
+                value={query}
+                onFocus={mercadona.ensureIndex}
+                onChange={event => handleQueryChange(event.target.value)}
+                onKeyDown={event => { if (event.key === "Escape") setQuery(""); }}
+                placeholder="Busca en Mercadona y en tus productos"
+                className="h-12 w-full rounded-md bg-surface pl-11 pr-12 text-base text-text placeholder:text-muted focus:outline-none focus-visible:outline-highlight"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  aria-label="Borrar búsqueda"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 grid place-items-center rounded-full text-muted hover:bg-surface-sunk"
+                >
+                  <X size={18} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </header>
 
-      <main
-        className=" max-w-6xl mx-auto py-20 grid md:grid-cols-2"
-      >
-        {/* button para enseñar filtros o ver cesta */}
-        <button
-          onClick={showProduct}
-          className={`fixed bottom-0 uppercase  w-screen font-extrabold md:hidden z-10 ${show ? 'bg-emerald-500 text-white uppercase ' : 'bg-white text-emerald-500 border-dashed border-t-2 border-emerald-500'}`}
-        >
-          {show ? 'ver cesta ' : 'filtrar'}
-        </button>
+      <div className="mx-auto max-w-content px-4 md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-8">
+        <main className="pt-4 pb-32 md:pb-12">
+          {searching ? (
+            <div>
+              <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto" role="group" aria-label="Dónde buscar">
+                {sourceChip("todo", "Todo")}
+                {sourceChip("mercadona", "Mercadona", mercadonaResults.length)}
+                {sourceChip("propios", "Mis productos", ownResults.length)}
+              </div>
 
+              {showMercadona && catalogStatus}
 
-        <div>
-          <div
-            className="flex flex-row justify-center"
-          >
-            <button
-              onClick={() => showProduct()}
-              aria-expanded={show}
-              aria-label={show ? "Ocultar productos" : "Mostrar productos"}
-              className={`flex items-center justify-center border-2 rounded-full border-emerald-600 h-10 w-10
-              transition-transform animate-rotate
-              ${show ? "rotate-90 bg-emerald-600 text-white" : "bg-emerald-200"}`}
-            >
-              <span
-                className="block mb-1 text-4xl transform-origin-center"
-              >
-                +
-              </span>
-            </button>
-            <h2
-              className=" ml-3 uppercase font-extrabold text-4xl mb-9"
-            > Filtro</h2>
-          </div>
-
-          <div
-            className={` ${show ? "block " : "hidden"}`}
-          >
-            {/* pestañas: catálogo propio o Mercadona */}
-            <div className="flex flex-row justify-center gap-2 px-2 mb-5" role="tablist">
-              <button
-                role="tab"
-                aria-selected={catalogTab === "propios"}
-                onClick={() => setCatalogTab("propios")}
-                className={`uppercase p-2 font-extrabold border-b-4 ${catalogTab === "propios" ? "border-emerald-600" : "border-transparent text-gray-500"}`}
-              >
-                mis productos
-              </button>
-              <button
-                role="tab"
-                aria-selected={catalogTab === "mercadona"}
-                onClick={() => setCatalogTab("mercadona")}
-                className={`uppercase p-2 font-extrabold border-b-4 ${catalogTab === "mercadona" ? "border-emerald-600" : "border-transparent text-gray-500"}`}
-              >
-                mercadona
-              </button>
-            </div>
-
-            {catalogTab === "mercadona" ? (
-              <MercadonaCatalog onAdd={addItem} />
-            ) : (
-              <>
-                <div
-                  className="flex flex-row justify-center px-2"
-                >
-
-                  <button
-                    className=" uppercase p-1 border-2 font-extrabold bg-gray-300 border-gray-500"
-                    onClick={() => createProduct()}
-                  > -nuevo producto-</button>
-                  <div className={` ${showNewProduct ? '  fixed  bottom-6 h-2/6 w-full md:bottom-56 bg-white border-2 border-emerald-300 md:w-2/6 md:max-h-96 transform transition-all duration-500 ease-linear z-20 ' : ' fixed -bottom-full transform transition-all duration-1000 ease-in-out '}`}>
-
+              {showOwn && ownResults.length > 0 && (
+                <section aria-labelledby="own-results" className="mb-6">
+                  <h2 id="own-results" className="text-sm font-semibold text-muted mb-2">Tus productos</h2>
+                  <ul className="space-y-2">
+                    {(source === "todo" ? ownResults.slice(0, OWN_PREVIEW) : ownResults).map(item => (
+                      <ProductRow
+                        key={item.id}
+                        item={item}
+                        detail={ownDetail(item)}
+                        quantity={quantityOf(item.id)}
+                        onAdd={addItem}
+                        onDecrease={decreaseFromResults}
+                      />
+                    ))}
+                  </ul>
+                  {source === "todo" && ownResults.length > OWN_PREVIEW && (
                     <button
-                      onClick={createProduct}
-                      aria-label="Cerrar nuevo producto"
-                      className="text-xl font-extrabold w-full bg-red-300 md:w-16">
-                      X
+                      type="button"
+                      onClick={() => setSource("propios")}
+                      className="mt-2 h-11 px-1 text-sm font-semibold text-accent underline underline-offset-2"
+                    >
+                      Ver tus {ownResults.length} productos
                     </button>
-                    <FormProductCustom
-                      addOtherItem={addOtherItem}
-                      setShowNewProduct={setShowNewProduct}
-                      createArrayItem={createArrayItem}
-                      itemCategories={itemCategories}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-y-6 py-5 grid-cols-2 my-5 border-2 border-y-zinc-300 md:border-0 ">
+                  )}
+                </section>
+              )}
 
+              {showMercadona && mercadonaResults.length > 0 && (
+                <section aria-labelledby="mercadona-results" className="mb-6">
+                  <h2 id="mercadona-results" className="text-sm font-semibold text-muted mb-2">
+                    Mercadona <span className="tabular">({mercadonaResults.length})</span>
+                  </h2>
+                  <ul className="space-y-2">
+                    {mercadonaResults.slice(0, visibleCount).map(product => {
+                      const item = toListItem(product);
+                      return (
+                        <ProductRow
+                          key={product.mercadonaId}
+                          item={item}
+                          detail={mercadonaDetail(product)}
+                          previousPrice={product.previousPrice}
+                          quantity={quantityOf(item.id)}
+                          onAdd={addItem}
+                          onDecrease={decreaseFromResults}
+                        />
+                      );
+                    })}
+                  </ul>
+                  {mercadonaResults.length > visibleCount && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount(count => count + PAGE_SIZE)}
+                      className="mt-3 w-full h-12 rounded-md border border-border bg-surface font-semibold hover:border-accent"
+                    >
+                      Mostrar más ({mercadonaResults.length - visibleCount})
+                    </button>
+                  )}
+                </section>
+              )}
+
+              {noResults && (
+                <div className="rounded-md bg-surface p-6 text-center">
+                  <p className="font-semibold">
+                    {loadingCatalog ? "Buscando…" : `No hay nada que coincida con «${deferredQuery.trim()}».`}
+                  </p>
+                  {!loadingCatalog && (
+                    <button
+                      type="button"
+                      onClick={() => openNewProduct(deferredQuery.trim())}
+                      className="mt-4 inline-flex items-center gap-2 h-11 px-4 rounded-md bg-accent text-on-accent font-semibold hover:bg-accent-strong"
+                    >
+                      <Plus size={18} aria-hidden="true" /> Crear «{deferredQuery.trim()}»
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <section aria-labelledby="own-title">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h2 id="own-title" className="text-lg font-bold">Tus productos</h2>
+                  <button
+                    type="button"
+                    onClick={() => openNewProduct()}
+                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-pill bg-accent-soft text-on-accent-soft text-sm font-semibold hover:bg-accent hover:text-on-accent"
+                  >
+                    <Plus size={16} aria-hidden="true" /> Nuevo producto
+                  </button>
+                </div>
+
+                <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Categorías">
                   {itemCategories.map(item => (
                     <ButtonComponent
                       key={item}
@@ -204,47 +415,80 @@ function App() {
                       type={item}
                       isActive={selectedCheckbox === item}
                     />
-                  ))
-                  }
-
-                </div>
-
-                <h2
-                  className=" ml-3 uppercase font-extrabold text-center text-xl mb-9"
-                > Productos</h2>
-                <div className="grid grid-cols-2">
-                  {filteredItems.map(item => (
-                    <ListItem
-                      key={item.id}
-                      item={item}
-                      addItem={addItem}
-                    />
                   ))}
                 </div>
-              </>
-            )}
+
+                <ul className="space-y-2">
+                  {filteredItems.map(item => (
+                    <ProductRow
+                      key={item.id}
+                      item={item}
+                      detail={ownDetail(item)}
+                      quantity={quantityOf(item.id)}
+                      onAdd={addItem}
+                      onDecrease={decreaseFromResults}
+                    />
+                  ))}
+                </ul>
+              </section>
+
+              <MercadonaCatalog
+                wh={mercadona.wh}
+                groups={mercadona.groups}
+                groupsState={mercadona.groupsState}
+                groupsError={mercadona.groupsError}
+                onRetryGroups={mercadona.retry}
+                onChangeWarehouse={mercadona.changeWarehouse}
+                quantityOf={quantityOf}
+                onAdd={addItem}
+                onDecrease={decreaseFromResults}
+              />
+            </div>
+          )}
+        </main>
+
+        {/* Lista: columna fija en escritorio */}
+        <aside className="hidden md:block" aria-label="Tu lista">
+          <div className="sticky top-[136px] mt-4 h-[calc(100vh-152px)] overflow-hidden rounded-lg border border-border shadow-pop">
+            {listPanel(true)}
           </div>
-        </div>
-        <div
-          className="border border-dashed border-slate-900 p-5 rounded-md space-y-10 md:border-none overflow-y-auto max-h-96 md:max-h-[80vh]"
+        </aside>
+      </div>
+
+      {/* Lista: barra inferior en el móvil */}
+      <div className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-surface shadow-bar px-4 pt-3 safe-bottom">
+        <button
+          type="button"
+          onClick={() => setListOpen(true)}
+          className="w-full h-14 flex items-center gap-3 rounded-md bg-accent px-4 text-on-accent"
+          aria-label={`Ver lista: ${lineCount} productos, ${formatCurrency(total)}`}
         >
+          <span className="relative">
+            <ShoppingBasket size={24} aria-hidden="true" />
+            <span className="absolute -top-2 -right-3 min-w-[22px] h-[22px] px-1 rounded-pill bg-highlight text-on-highlight text-xs font-bold grid place-items-center tabular">
+              {lineCount}
+            </span>
+          </span>
+          <span className="ml-3 font-semibold">Ver lista</span>
+          <span className="ml-auto text-lg font-extrabold tabular">{formatCurrency(total)}</span>
+        </button>
+      </div>
 
-          <ButtonPdf
-            order={order}
-          ></ButtonPdf>
-          <ListOrder
-            order={order}
-            addItem={addItem}
-            decreaseItem={decreaseItem}
-            removeItem={removeItem}
-          />
-          <OrderTotal
-            order={order}
+      <Sheet open={listOpen} title={`Tu lista (${lineCount})`} onClose={closeList} variant="full">
+        {listPanel(false)}
+      </Sheet>
 
-          />
-        </div>
-      </main >
-    </>
+      <Sheet open={showNewProduct} title="Nuevo producto" onClose={closeNewProduct}>
+        <FormProductCustom
+          key={newProductName}
+          addOtherItem={addOtherItem}
+          setShowNewProduct={setShowNewProduct}
+          createArrayItem={createArrayItem}
+          itemCategories={itemCategories}
+          initialName={newProductName}
+        />
+      </Sheet>
+    </div>
   )
 }
 

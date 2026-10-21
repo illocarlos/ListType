@@ -27,3 +27,13 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 ## Desviaciones de las reglas de REA (decisión del usuario)
 
 - Se consume la API interna de Mercadona y se muestran sus fotos desde su CDN. Build prohíbe cargar nada del dominio del original; aquí Mercadona no es la app que se clona sino la fuente de datos que el usuario ha elegido, para uso personal.
+
+## 2026-10-21 · Rediseño (fase 3 design) y buscador
+
+- Tokens propios en `replica/design/` (verde oliva + amarillo para el contador, Onest). Contraste: 16 pares, 0 fallos AA.
+- Buscador en la cabecera: tiempo real desde la primera letra, sin acentos, por palabras, sobre tus productos y todo Mercadona. Al enfocarlo se cargan en segundo plano los pasillos que falten (antes solo buscaba en los abiertos: era un fallo de diseño).
+- Filas con − n + en los resultados; lista fija a la derecha en escritorio y hoja a pantalla completa desde la barra inferior en el móvil.
+- Alta manual en diálogo; desde "sin resultados" se crea el producto con el nombre ya escrito.
+- Errores de Mercadona con el código real (403, 404, 429, 502) para diagnosticar.
+- Se conservan: catálogo propio por categorías, alta manual, persistencia compatible, cantidades, quitar, total y PDF.
+- Pruebas: 52/52 en Chromium (escritorio y móvil) con respuestas simuladas.

@@ -22,7 +22,7 @@ Mostrar foto y precio real en la cesta,cesta,must,yes,yes,
 Precio por unidad de referencia (€/kg €/L €/ud),catálogo Mercadona,should,yes,partial,depende de que la API real traiga reference_price
 Formato / envase / tamaño del producto,catálogo Mercadona,should,yes,partial,depende de packaging y unit_size reales
 Indicador de rebaja (precio anterior),catálogo Mercadona,could,yes,partial,solo si la API trae previous_unit_price
-Buscar productos de Mercadona por nombre,catálogo Mercadona,should,yes,yes,búsqueda local sin acentos sobre pasillos abiertos
+Buscar productos de Mercadona por nombre,catálogo Mercadona,should,yes,yes,tiempo real desde 1 letra sobre todo el catálogo; carga de pasillos en segundo plano al enfocar
 Ficha de producto con foto grande y datos,catálogo Mercadona,could,yes,no,M04
 Restar una unidad (+/- por línea),cesta,should,yes,yes,− deshabilitado en 1; X sigue quitando la línea
 Alérgenos e ingredientes,catálogo Mercadona,could,yes,no,M04; requiere petición de detalle por producto

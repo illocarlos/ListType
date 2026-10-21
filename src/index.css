@@ -1,3 +1,63 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Tokens de diseño (fuente: replica/design/tokens.json). Los componentes usan los roles vía Tailwind, nunca hex sueltos. */
+:root {
+  --color-bg: 242 245 240;
+  --color-surface: 255 255 255;
+  --color-surface-sunk: 230 236 227;
+  --color-border: 213 222 209;
+  --color-border-input: 111 127 114;
+  --color-text: 22 35 27;
+  --color-text-muted: 79 95 85;
+  --color-accent: 44 106 67;
+  --color-accent-strong: 31 79 49;
+  --color-on-accent: 255 255 255;
+  --color-accent-soft: 220 235 223;
+  --color-on-accent-soft: 31 79 49;
+  --color-highlight: 242 201 76;
+  --color-on-highlight: 22 35 27;
+  --color-danger: 180 35 24;
+  --color-on-danger: 255 255 255;
+
+  --shadow-bar: 0 -6px 24px rgba(22, 35, 27, .10);
+  --shadow-pop: 0 16px 40px rgba(22, 35, 27, .18);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--color-accent));
+    outline-offset: 2px;
+  }
+
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .safe-bottom {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

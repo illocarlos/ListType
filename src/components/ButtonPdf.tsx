@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import type { orderItem } from "../types/types"
 import { formatCurrency } from '../helpers/formatPrice';
 import { imageToDataUrl } from '../helpers/mercadona';
@@ -107,10 +108,12 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
 
     return (
         <button
-            className='bg-emerald-200 p-3 font-extrabold disabled:opacity-50'
+            type='button'
+            className='w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent text-on-accent font-semibold hover:bg-accent-strong disabled:opacity-50 disabled:hover:bg-accent'
             onClick={handleDownloadPdf}
             disabled={!order || order.length === 0 || generating}
         >
+            <FileDown size={20} aria-hidden='true' />
             {generating ? 'Generando PDF…' : 'Descargar lista PDF'}
         </button>
     );

@@ -6,27 +6,20 @@ interface FormProps {
     addOtherItem: (filteredItems: listItem) => void;
     createArrayItem: (pushFIlter: listItem) => void;
     itemCategories: string[];
+    initialName?: string;
 }
 
-const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduct, createArrayItem, itemCategories }) => {
+const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduct, createArrayItem, itemCategories, initialName = "" }) => {
     // Estados para almacenar el nombre y la categoría del producto
-    const [productName, setProductName] = useState<string>("");
+    const [productName, setProductName] = useState<string>(initialName);
     const [productType, setProductType] = useState<string>("");
-
-    // Funciones para manejar cambios en los campos de entrada
-    const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setProductName(event.target.value);
-    };
-
-    const handleTypeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-        const newValue = event.target.value;
-        setProductType(newValue); // Actualizar el estado productType con el nuevo valor seleccionado
-    };
+    const [error, setError] = useState<string>("");
 
     function generateNumericId(): number {
         const numericId = Math.floor(Math.random() * 9000000000) + 1000000000; // Generar un número aleatorio de 10 dígitos
         return numericId;
     }
+
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         // Crear un nuevo objeto de producto con los datos del formulario
@@ -34,63 +27,60 @@ const FormProductCustom: React.FC<FormProps> = ({ addOtherItem, setShowNewProduc
             id: generateNumericId(), // Generar un id único
             name: productName.trim().replace(/[.;,]/g, "").toLowerCase(),
             price: 0,
-            type: productType, // Usar el valor actual de productType
+            type: productType,
             source: "manual",
         };
 
         if (newProduct.name.length < 2 || !newProduct.type) {
-            return alert("nita por favor, el producto tiene que tener al menos 2 letras y una categoría");
+            setError("nita por favor, el producto tiene que tener al menos 2 letras y una categoría");
+            return;
         }
 
-        setShowNewProduct(false);
         addOtherItem(newProduct);
         createArrayItem(newProduct);
         setProductName("");
-        setProductType(""); // Limpiar la categoría: el select es controlado y vuelve a "selecciona categoría"
-
+        setProductType("");
+        setError("");
+        setShowNewProduct(false);
     };
 
     return (
-        <form className="flex flex-col items-center justify-around w-6/6" onSubmit={handleSubmit}>
-
-            <div className="border-b-2 border-emerald-600  w-4/6 flex flex-col ">
-                <div className="border-b-2 border-emerald-600 my-7 ">
-
-                    <label className="text-sm" htmlFor="productName">
-                        Producto:
-                    </label>
-                    <input
-                        className="focus:outline-none focus:border-transparent "
-                        type="text"
-                        id="productName"
-                        value={productName}
-                        onChange={handleNameChange}
-                    />
-                </div>
-
-                <label className="sr-only" htmlFor="productType">Categoría</label>
-                <select name="productType" id="productType" value={productType} onChange={handleTypeChange}>
-
-
-                    <option
-                        value="">--selecciona categoria --</option>
-                    {itemCategories.map(category => (
-
-                        <option
-                            key={category}
-                            value={category}>{category}</option>
-
-                    ))}
-
-
-                </select>
-
+        <form className="flex flex-col gap-4 p-4" onSubmit={handleSubmit} noValidate>
+            <div className="flex flex-col gap-1">
+                <label className="text-sm font-semibold" htmlFor="productName">Nombre</label>
+                <input
+                    className="h-12 rounded-md border-2 border-border-input bg-surface px-3 text-base focus:border-accent focus:outline-none"
+                    type="text"
+                    id="productName"
+                    autoComplete="off"
+                    value={productName}
+                    onChange={event => setProductName(event.target.value)}
+                    placeholder="Por ejemplo: pan de pueblo"
+                />
             </div>
 
-            <button className="text-sm rounded-lg  w-2/6 p-2  my-7 bg-emerald-400" type="submit">
-                Guardar
+            <div className="flex flex-col gap-1">
+                <label className="text-sm font-semibold" htmlFor="productType">Categoría</label>
+                <select
+                    name="productType"
+                    id="productType"
+                    value={productType}
+                    onChange={event => setProductType(event.target.value)}
+                    className="h-12 rounded-md border-2 border-border-input bg-surface px-3 text-base capitalize focus:border-accent focus:outline-none"
+                >
+                    <option value="">Elige una categoría</option>
+                    {itemCategories.map(category => (
+                        <option key={category} value={category}>{category}</option>
+                    ))}
+                </select>
+            </div>
+
+            {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+
+            <button className="h-12 rounded-md bg-accent text-on-accent font-semibold hover:bg-accent-strong" type="submit">
+                Guardar y añadir a la lista
             </button>
-        </form >
+        </form>
     );
 };
 
