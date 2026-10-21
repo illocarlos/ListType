@@ -46,7 +46,14 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
 
             {/* Nombre arriba (hasta 2 líneas) y debajo precio + formato: el nombre usa todo el ancho */}
             <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold leading-tight line-clamp-2">{item.name}</p>
+                <p className="text-base font-semibold leading-tight line-clamp-2">
+                    {item.isNew && (
+                        <span className="mr-1.5 inline-block translate-y-[-1px] rounded-pill bg-highlight px-2 py-0.5 align-middle text-xs font-bold text-on-highlight">
+                            Novedad
+                        </span>
+                    )}
+                    {item.name}
+                </p>
                 <p className="mt-1 flex items-baseline gap-2 min-w-0">
                     {item.price > 0 && (
                         <span className="flex-none text-sm font-bold tabular">{formatCurrency(item.price)}</span>

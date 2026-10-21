@@ -53,6 +53,11 @@
   .safe-bottom {
     padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
+
+  /* App instalada en iPhone: la barra de estado queda encima del contenido */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -17,6 +17,7 @@ import ButtonPdf from "./components/ButtonPdf.tsx"
 import MercadonaCatalog from "./components/MercadonaCatalog.tsx"
 import ProductRow from "./components/ProductRow.tsx"
 import Sheet from "./components/Sheet.tsx"
+import InstallHint from "./components/InstallHint.tsx"
 
 type Source = "todo" | "favoritos" | "mercadona"
 
@@ -250,7 +251,7 @@ function App() {
   return (
     <div className="min-h-screen">
       {/* Cabecera con el buscador: lo primero y siempre a mano */}
-      <header className="sticky top-0 z-30 bg-accent-strong text-on-accent">
+      <header className="sticky top-0 z-30 bg-accent-strong text-on-accent safe-top">
         <div className="mx-auto max-w-content px-4">
           <div className="flex h-14 items-center justify-between">
             <h1 className="text-xl font-extrabold tracking-tight">Lista de la compra</h1>
@@ -366,6 +367,7 @@ function App() {
             </div>
           ) : (
             <div>
+              <InstallHint />
               <section aria-labelledby="favorites-title">
                 <div className="flex items-baseline justify-between gap-3 mb-3">
                   <h2 id="favorites-title" className="text-lg font-bold">Tus favoritos</h2>
