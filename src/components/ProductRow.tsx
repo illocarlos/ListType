@@ -35,78 +35,89 @@ export const Thumb = ({ item, size = "md" }: { item: listItem, size?: "sm" | "md
     );
 };
 
+// Fila de producto pensada para todo el mundo:
+// nombre completo (sin cortar), textos de 14 px como mínimo, botones de 44 px y "Añadir" escrito.
 const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite }: ProductRowProps) => {
     const inList = quantity > 0;
 
     return (
         <li
-            className={`flex items-center gap-3 px-3 py-2 min-h-[72px] rounded-md transition-colors duration-200 ${inList ? "bg-accent-soft" : "bg-surface"}`}
+            className={`flex gap-3 px-3 py-3 rounded-md transition-colors duration-200 ${inList ? "bg-accent-soft" : "bg-surface"}`}
         >
             <Thumb item={item} />
 
-            {/* Nombre arriba (hasta 2 líneas) y debajo precio + formato: el nombre usa todo el ancho */}
             <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold leading-tight line-clamp-2">
-                    {item.isNew && (
-                        <span className="mr-1.5 inline-block translate-y-[-1px] rounded-pill bg-highlight px-2 py-0.5 align-middle text-xs font-bold text-on-highlight">
-                            Novedad
-                        </span>
+                <div className="flex items-start gap-1">
+                    <p className="flex-1 text-base font-semibold leading-snug break-words">
+                        {item.isNew && (
+                            <span className="mr-1.5 inline-block rounded-pill bg-highlight px-2 align-[2px] text-sm font-bold leading-6 text-on-highlight">
+                                Novedad
+                            </span>
+                        )}
+                        {item.name}
+                    </p>
+                    {onToggleFavorite && (
+                        <button
+                            type="button"
+                            onClick={() => onToggleFavorite(item)}
+                            aria-pressed={favorite}
+                            aria-label={favorite ? `Quitar ${item.name} de favoritos` : `Guardar ${item.name} en favoritos`}
+                            className={`flex-none -mt-2 -mr-2 h-11 w-11 grid place-items-center rounded-full ${favorite ? "text-danger" : "text-muted hover:text-danger"}`}
+                        >
+                            <Heart size={22} aria-hidden="true" fill={favorite ? "currentColor" : "none"} />
+                        </button>
                     )}
-                    {item.name}
-                </p>
-                <p className="mt-1 flex items-baseline gap-2 min-w-0">
-                    {item.price > 0 && (
-                        <span className="flex-none text-sm font-bold tabular">{formatCurrency(item.price)}</span>
-                    )}
-                    {previousPrice ? (
-                        <span className="flex-none text-xs text-muted line-through tabular">{formatCurrency(previousPrice)}</span>
-                    ) : null}
-                    {detail && <span className="text-xs text-muted truncate">{detail}</span>}
-                </p>
-            </div>
-
-            {onToggleFavorite && (
-                <button
-                    type="button"
-                    onClick={() => onToggleFavorite(item)}
-                    aria-pressed={favorite}
-                    aria-label={favorite ? `Quitar ${item.name} de favoritos` : `Guardar ${item.name} en favoritos`}
-                    className={`flex-none h-11 w-9 -mx-1 grid place-items-center rounded-full ${favorite ? "text-danger" : "text-muted hover:text-danger"}`}
-                >
-                    <Heart size={20} aria-hidden="true" fill={favorite ? "currentColor" : "none"} />
-                </button>
-            )}
-
-            {inList ? (
-                <div className="flex-none flex items-center rounded-pill bg-surface border border-border">
-                    <button
-                        type="button"
-                        onClick={() => onDecrease(item)}
-                        aria-label={quantity === 1 ? `Quitar ${item.name} de la lista` : `Quitar una unidad de ${item.name}`}
-                        className="h-11 w-10 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
-                    >
-                        <Minus size={18} aria-hidden="true" />
-                    </button>
-                    <span className="min-w-[1.25rem] text-center font-bold tabular" aria-label={`${quantity} en la lista`}>{quantity}</span>
-                    <button
-                        type="button"
-                        onClick={() => onAdd(item)}
-                        aria-label={`Añadir una unidad de ${item.name}`}
-                        className="h-11 w-10 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
-                    >
-                        <Plus size={18} aria-hidden="true" />
-                    </button>
                 </div>
-            ) : (
-                <button
-                    type="button"
-                    onClick={() => onAdd(item)}
-                    aria-label={`Añadir ${item.name} a la lista`}
-                    className="flex-none h-11 w-11 grid place-items-center rounded-full bg-accent text-on-accent hover:bg-accent-strong"
-                >
-                    <Plus size={20} aria-hidden="true" />
-                </button>
-            )}
+
+                {detail && <p className="text-sm text-muted break-words">{detail}</p>}
+
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="tabular">
+                        {item.price > 0 && <span className="text-base font-bold">{formatCurrency(item.price)}</span>}
+                        {previousPrice ? (
+                            <span className="ml-2 text-sm text-muted">
+                                <span className="sr-only">antes </span>
+                                <span className="line-through">{formatCurrency(previousPrice)}</span>
+                            </span>
+                        ) : null}
+                    </p>
+
+                    {inList ? (
+                        <div className="flex items-center rounded-pill bg-surface border border-border">
+                            <button
+                                type="button"
+                                onClick={() => onDecrease(item)}
+                                aria-label={quantity === 1 ? `Quitar ${item.name} de la lista` : `Quitar una unidad de ${item.name}`}
+                                className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
+                            >
+                                <Minus size={20} aria-hidden="true" />
+                            </button>
+                            <span className="min-w-[1.75rem] text-center text-lg font-bold tabular">
+                                {quantity}
+                                <span className="sr-only"> en la lista</span>
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => onAdd(item)}
+                                aria-label={`Añadir una unidad de ${item.name}`}
+                                className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
+                            >
+                                <Plus size={20} aria-hidden="true" />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => onAdd(item)}
+                            aria-label={`Añadir ${item.name} a la lista`}
+                            className="h-11 px-4 inline-flex items-center gap-1.5 rounded-pill bg-accent text-on-accent text-base font-semibold hover:bg-accent-strong"
+                        >
+                            <Plus size={20} aria-hidden="true" />
+                            Añadir
+                        </button>
+                    )}
+                </div>
+            </div>
         </li>
     );
 };

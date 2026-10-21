@@ -11,7 +11,6 @@ type MercadonaCatalogProps = {
     groupsState: LoadState,
     groupsError: string,
     onRetryGroups: () => void,
-    onChangeWarehouse: (code: string) => boolean,
     quantityOf: (id: number) => number,
     onAdd: (item: listItem) => void,
     onDecrease: (item: listItem) => void,
@@ -23,15 +22,12 @@ const errorMessage = (error: unknown) =>
     error instanceof MercadonaError ? error.message : "No se ha podido cargar el pasillo.";
 
 // Explorar Mercadona por pasillos (alternativa al buscador)
-const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups, onChangeWarehouse, quantityOf, onAdd, onDecrease, isFavorite, onToggleFavorite }: MercadonaCatalogProps) => {
+const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups, quantityOf, onAdd, onDecrease, isFavorite, onToggleFavorite }: MercadonaCatalogProps) => {
     const [openGroupId, setOpenGroupId] = useState<number | null>(null);
     const [aisle, setAisle] = useState<MercadonaAisle | null>(null);
     const [products, setProducts] = useState<MercadonaProduct[]>([]);
     const [productsState, setProductsState] = useState<LoadState>("idle");
     const [productsError, setProductsError] = useState<string>("");
-    const [editingWh, setEditingWh] = useState<boolean>(false);
-    const [whDraft, setWhDraft] = useState<string>(wh);
-    const [whError, setWhError] = useState<string>("");
 
     const openAisle = async (selected: MercadonaAisle, force = false) => {
         setAisle(selected);
@@ -56,42 +52,9 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
         return [...map.entries()];
     }, [products]);
 
-    const saveWarehouse = (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!onChangeWarehouse(whDraft)) {
-            setWhError("Solo letras y números, por ejemplo svq1.");
-            return;
-        }
-        setWhError("");
-        setEditingWh(false);
-        setAisle(null);
-        setProducts([]);
-    };
-
     return (
         <section aria-labelledby="explore-title">
-            <div className="flex items-baseline justify-between gap-3 mb-3">
-                <h2 id="explore-title" className="text-lg font-bold">Pasillos de Mercadona</h2>
-                <button type="button" className="text-sm text-accent underline underline-offset-2" onClick={() => setEditingWh(!editingWh)}>
-                    Almacén {wh.toUpperCase()}
-                </button>
-            </div>
-
-            {editingWh && (
-                <form onSubmit={saveWarehouse} className="mb-4 rounded-md bg-surface p-3 flex flex-col gap-2">
-                    <label htmlFor="warehouse" className="text-sm font-semibold">Código de almacén (decide los precios)</label>
-                    <div className="flex gap-2">
-                        <input
-                            id="warehouse"
-                            value={whDraft}
-                            onChange={event => setWhDraft(event.target.value)}
-                            className="h-11 flex-1 rounded-md border-2 border-border-input px-3 focus:border-accent focus:outline-none"
-                        />
-                        <button type="submit" className="h-11 px-4 rounded-md bg-accent text-on-accent font-semibold">Guardar</button>
-                    </div>
-                    {whError && <p role="alert" className="text-sm text-danger">{whError}</p>}
-                </form>
-            )}
+            <h2 id="explore-title" className="text-lg font-bold mb-3">Pasillos de Mercadona</h2>
 
             {aisle ? (
                 <div>
@@ -190,7 +153,7 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
                                                         key={item.id}
                                                         type="button"
                                                         onClick={() => openAisle(item)}
-                                                        className="h-9 px-4 rounded-pill border border-border bg-bg text-sm hover:border-accent"
+                                                        className="h-11 px-4 rounded-pill border border-border bg-bg text-base hover:border-accent"
                                                     >
                                                         {item.name}
                                                     </button>

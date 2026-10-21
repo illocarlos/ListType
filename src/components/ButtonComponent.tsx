@@ -11,7 +11,7 @@ const ButtonComponent = ({ filterFunction, type, isActive }: ListButtonProps) =>
             type="button"
             aria-pressed={isActive}
             onClick={() => filterFunction(type)}
-            className={`flex-none h-9 px-4 rounded-pill border text-sm font-medium transition-colors duration-200 ${isActive
+            className={`flex-none h-11 px-4 rounded-pill border text-base font-medium transition-colors duration-200 ${isActive
                 ? "bg-accent border-accent text-on-accent"
                 : "bg-surface border-border text-text hover:border-accent"}`}
         >

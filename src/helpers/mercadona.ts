@@ -17,34 +17,102 @@ type CacheEntry<T> = { savedAt: number, data: T };
 // si no viene, el error lo ha dado Vercel antes de llegar a la función (por ejemplo, 404 porque no existe)
 export type ErrorOrigin = "mercadona" | "vercel" | "red";
 
-// Mensajes con el código real y su origen para poder diagnosticar qué falla
+// Mensajes en lenguaje llano para cualquier usuario, con un código corto al final para diagnosticar:
+// M = lo ha respondido Mercadona, V = el servidor de la app (Vercel), R = sin conexión
 function describeStatus(status: number, origin: ErrorOrigin): string {
-    if (origin === "red") return "No hay conexión con el servidor de la app. Revisa tu conexión.";
-    if (origin === "vercel") {
-        return status === 404
-            ? "La app no encuentra su conexión con Mercadona en el servidor (error 404 de Vercel)."
-            : `El servidor de la app ha fallado (error ${status} de Vercel).`;
-    }
-    if (status === 429) return "Mercadona está recibiendo demasiadas peticiones. Prueba otra vez en un minuto (error 429 de Mercadona).";
-    if (status === 404) return "Mercadona no reconoce la dirección que se le pide (error 404 de Mercadona).";
-    if (status === 403 || status === 401) return `Mercadona ha rechazado la petición (error ${status} de Mercadona).`;
-    if (status === 502 || status === 504) return `Mercadona no responde o ha devuelto algo inesperado (error ${status}).`;
-    return `No se ha podido cargar el catálogo de Mercadona (error ${status} de Mercadona).`;
+    const calm = "Tu lista y tus favoritos siguen funcionando.";
+    if (origin === "red") return `No hay conexión a internet. ${calm} (Código R0)`;
+    if (origin === "vercel") return `Ahora mismo no se pueden ver los productos de Mercadona. ${calm} (Código V${status})`;
+    if (status === 429) return `Mercadona está muy ocupado. Inténtalo otra vez en un minuto. ${calm} (Código M429)`;
+    return `Ahora mismo Mercadona no responde. ${calm} (Código M${status})`;
 }
 
 export class MercadonaError extends Error {
     status: number;
     origin: ErrorOrigin;
     constructor(status: number, origin: ErrorOrigin = "mercadona") {
-        super(`${describeStatus(status, origin)} Tu lista sigue funcionando igual.`);
+        super(describeStatus(status, origin));
         this.status = status;
         this.origin = origin;
     }
 }
 
+// ---------- Zona (código postal → almacén) ----------
+// Cada usuario escribe su código postal y la app guarda el almacén que le corresponde.
+// Va en una clave aparte para que la limpieza de caché nunca la borre.
+
+const ZONE_KEY = "mercadona-zone:v1";
+
+export type Zone = { postalCode: string, wh: string };
+
+export function getZone(): Zone | null {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(ZONE_KEY) || "null");
+        if (parsed && /^\d{5}$/.test(parsed.postalCode) && /^[a-z0-9]{2,10}$/.test(parsed.wh)) return parsed as Zone;
+    } catch {
+        // dato corrupto: como si no hubiera zona
+    }
+    return null;
+}
+
+function saveZone(zone: Zone) {
+    try {
+        localStorage.setItem(ZONE_KEY, JSON.stringify(zone));
+    } catch {
+        // sin espacio: se usará durante esta sesión igualmente
+    }
+}
+
+export type ZoneErrorReason = "invalid" | "no-service" | "busy" | "connection";
+
+export class ZoneError extends Error {
+    reason: ZoneErrorReason;
+    constructor(reason: ZoneErrorReason) {
+        const messages: Record<ZoneErrorReason, string> = {
+            invalid: "El código postal tiene que tener 5 números. Por ejemplo: 41300.",
+            "no-service": "Mercadona no reparte por internet en ese código postal. Verás los precios generales.",
+            busy: "Mercadona está muy ocupado ahora mismo. Inténtalo otra vez en un minuto.",
+            connection: "No se ha podido comprobar el código postal. Revisa la conexión e inténtalo otra vez.",
+        };
+        super(messages[reason]);
+        this.reason = reason;
+    }
+}
+
+// Pregunta a Mercadona (a través del proxy) qué almacén corresponde a un código postal y lo guarda
+export async function resolvePostalCode(input: string): Promise<Zone> {
+    const postalCode = input.replace(/\D/g, "");
+    if (!/^\d{5}$/.test(postalCode)) throw new ZoneError("invalid");
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE}?${new URLSearchParams({ path: "zone", pc: postalCode }).toString()}`, {
+            headers: { Accept: "application/json" },
+        });
+    } catch {
+        throw new ZoneError("connection");
+    }
+    if (response.status === 400) throw new ZoneError("invalid");
+    if (response.status === 404) throw new ZoneError("no-service");
+    if (response.status === 429) throw new ZoneError("busy");
+    if (!response.ok) throw new ZoneError("connection");
+    let wh = "";
+    try {
+        wh = String((await response.json()).wh || "").toLowerCase();
+    } catch {
+        throw new ZoneError("connection");
+    }
+    if (!/^[a-z0-9]{2,10}$/.test(wh)) throw new ZoneError("no-service");
+    const zone = { postalCode, wh };
+    saveZone(zone);
+    setWarehouse(wh);
+    return zone;
+}
+
 // ---------- Almacén ----------
 
 export function getWarehouse(): string {
+    const zone = getZone();
+    if (zone) return zone.wh;
     try {
         return localStorage.getItem(WAREHOUSE_KEY) || DEFAULT_WAREHOUSE;
     } catch {
