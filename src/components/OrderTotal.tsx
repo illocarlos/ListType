@@ -5,19 +5,15 @@ import type { orderItem } from "../types/types"
 
 type TotalProps = {
     order: orderItem[],
-
-
 }
 
 const OrderTotal = ({ order }: TotalProps) => {
-
-
-    const total = useMemo(() => order.reduce((total, item) => total + (item.quantity * item.price), 0),
-        [order])
+    const total = useMemo(() => order.reduce((total, item) => total + (item.quantity * item.price), 0), [order])
 
     return (
-        <div>
-            <h1>Total: <span className=" text-emerald-900 font-extrabold text-lg">{formatCurrency(total)}/</span>aprox</h1>
+        <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm text-muted">Total aproximado</span>
+            <span className="text-xl font-extrabold tabular">{formatCurrency(total)}</span>
         </div>
     )
 }

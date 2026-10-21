@@ -1,38 +1,38 @@
 feature,area,priority,original,clone,notes
-Catálogo propio de productos por categorías (69 productos / 17 categorías),lista (actual),must,yes,yes,src/data/db.ts. Conservar
-Filtrar productos por categoría con botones,lista (actual),must,yes,partial,bug: tocar otra vez la categoría activa no vuelve a mostrar todo; el filtro mezcla el resultado anterior
+Catálogo propio de productos por categorías (69 productos / 17 categorías),lista (actual),must,yes,skip,retirado por decisión del usuario (2026-10-21): solo Mercadona + favoritos
+Filtrar productos por categoría con botones,lista (actual),must,yes,yes,ahora filtra los favoritos por pasillo de Mercadona
 Añadir producto a la lista con un toque (+1 si ya está),lista (actual),must,yes,yes,addItem deduplica por id
-Crear producto a mano (nombre + categoría),alta manual (actual),must,yes,partial,bugs: select no se resetea; mensaje dice 3 letras y valida 2; circuito allItem/useEffect frágil
-Productos creados a mano persisten tras recargar,alta manual (actual),must,yes,partial,localStorage itemArrayNew; no aparecen en la rejilla hasta filtrar
+Crear producto a mano (nombre + categoría),alta manual (actual),must,yes,skip,retirado por decisión del usuario (2026-10-21)
+Productos creados a mano persisten tras recargar,alta manual (actual),must,yes,skip,retirado por decisión del usuario; los datos guardados en itemArrayNew no se borran
 Lista persistente en localStorage,lista (actual),must,yes,yes,clave order. Formato debe seguir siendo compatible
 Cantidad por producto (Xn),cesta (actual),must,yes,yes,
 Subtotal por línea,cesta (actual),must,yes,yes,precios del catálogo propio son de relleno
-Total aproximado,cesta (actual),must,yes,partial,suma bien pero 54 de 69 productos valen 40 € de relleno
+Total aproximado,cesta (actual),must,yes,yes,precios reales de Mercadona; ya no hay precios de relleno
 Quitar producto de la lista,cesta (actual),must,yes,yes,quita la línea entera
 Estado vacío de la cesta,cesta (actual),must,yes,yes,"""no tienes ningun producto"""
-Descargar la lista en PDF,pdf (actual),must,yes,partial,requisito prioritario del usuario. Bug: más de ~25 líneas se salen del A4
+Descargar la lista en PDF,pdf (actual),must,yes,yes,mismo botón y título; ahora con salto de página
 Botón PDF deshabilitado con lista vacía,pdf (actual),must,yes,yes,
 Diseño móvil con barra fija filtrar / ver cesta,lista (actual),must,yes,yes,
-Panel deslizante de alta manual,alta manual (actual),must,yes,yes,
-Navegar categorías de Mercadona (grupo > pasillo > subcategoría),catálogo Mercadona,must,yes,no,M02. Vía proxy Vercel
-Ver productos de Mercadona con foto nombre y precio,catálogo Mercadona,must,yes,no,M03
-Añadir producto de Mercadona a la lista guardando una copia,catálogo Mercadona,must,yes,no,copia en localStorage; la lista no depende de la API
-Precios del almacén de Sevilla,catálogo Mercadona,must,yes,no,M01. Código de almacén de La Rinconada sin verificar
-Mostrar foto y precio real en la cesta,cesta,must,yes,no,
-Precio por unidad de referencia (€/kg €/L €/ud),catálogo Mercadona,should,yes,no,M03
-Formato / envase / tamaño del producto,catálogo Mercadona,should,yes,no,M03
-Indicador de rebaja (precio anterior),catálogo Mercadona,could,yes,no,M03; solo si la API lo da
-Buscar productos de Mercadona por nombre,catálogo Mercadona,should,yes,no,M05; búsqueda local sobre lo cacheado
+Panel deslizante de alta manual,alta manual (actual),must,yes,skip,retirado con el alta manual
+Navegar categorías de Mercadona (grupo > pasillo > subcategoría),catálogo Mercadona,must,yes,partial,hecho y probado con respuestas simuladas; falta verificar contra la API real en la vista previa
+Ver productos de Mercadona con foto nombre y precio,catálogo Mercadona,must,yes,partial,probado con datos simulados; falta la API real
+Añadir producto de Mercadona a la lista guardando una copia,catálogo Mercadona,must,yes,yes,copia en order con source mercadona; id fuera de rangos
+Precios del almacén de Sevilla,catálogo Mercadona,must,yes,partial,svq1 por defecto y editable; código sin verificar
+Mostrar foto y precio real en la cesta,cesta,must,yes,yes,
+Precio por unidad de referencia (€/kg €/L €/ud),catálogo Mercadona,should,yes,partial,depende de que la API real traiga reference_price
+Formato / envase / tamaño del producto,catálogo Mercadona,should,yes,partial,depende de packaging y unit_size reales
+Indicador de rebaja (precio anterior),catálogo Mercadona,could,yes,partial,solo si la API trae previous_unit_price
+Buscar productos de Mercadona por nombre,catálogo Mercadona,should,yes,yes,tiempo real desde 1 letra sobre todo el catálogo; carga de pasillos en segundo plano al enfocar
 Ficha de producto con foto grande y datos,catálogo Mercadona,could,yes,no,M04
-Restar una unidad (+/- por línea),cesta,should,yes,no,M06 lo tiene; ListType solo quita la línea entera
+Restar una unidad (+/- por línea),cesta,should,yes,yes,− deshabilitado en 1; X sigue quitando la línea
 Alérgenos e ingredientes,catálogo Mercadona,could,yes,no,M04; requiere petición de detalle por producto
-Mantener compatibles las claves order e itemArrayNew,datos,must,no,no,mejora propia: sin pérdida de datos al desplegar
-App funciona entera aunque Mercadona falle,datos,must,no,no,mejora propia: modo manual y catálogo propio siempre disponibles
-Caché perezosa por categoría con caducidad,datos,should,no,no,mejora propia: respeta rate limit y tamaño de localStorage
-PDF con salto de página,pdf,must,no,no,mejora propia
-PDF con precio por línea y total,pdf,should,no,no,mejora propia
-PDF con foto de cada producto,pdf,could,no,no,mejora propia; depende de CORS del CDN de imágenes
-Título de pestaña icono e idioma propios,marca,should,no,no,"hoy ""Vite + React + TS"", favicon roto, lang=en"
+Mantener compatibles las claves order e itemArrayNew,datos,must,no,yes,probado con datos en el formato antiguo
+App funciona entera aunque Mercadona falle,datos,must,no,yes,probado con 502 y 429
+Caché perezosa por categoría con caducidad,datos,should,no,yes,24 h; purga la más antigua si no cabe; la lista nunca se purga
+PDF con salto de página,pdf,must,no,yes,probado con 49 líneas: 4 páginas
+PDF con precio por línea y total,pdf,should,no,yes,mejora propia
+PDF con foto de cada producto,pdf,could,no,partial,directo al CDN y si no por /api/mercadona-img; si falla sale sin foto
+Título de pestaña icono e idioma propios,marca,should,no,yes,"Lista de la compra, favicon propio, lang es"
 Agrupar la lista por categoría / pasillo,cesta,could,no,no,mejora propia: más cómodo en la tienda física
 Comprar y pagar,tienda,could,yes,skip,no es una tienda
 Franjas de entrega y reparto,tienda,could,yes,skip,no es una tienda
@@ -40,3 +40,5 @@ Cuenta de cliente y login,tienda,could,yes,skip,sin cuentas ni base de datos por
 Búsqueda vía Algolia de Mercadona,catálogo Mercadona,should,yes,skip,usaría la clave incrustada en su frontend; se busca en local
 Marca y logo de Mercadona,marca,could,yes,skip,no se usa como identidad de la app
 Reseñas de productos,catálogo Mercadona,could,yes,skip,Mercadona no tiene
+Favoritos de Mercadona guardados en localStorage,favoritos,must,no,yes,corazón en cada producto; sección Tus favoritos con categorías; se actualizan con datos nuevos
+Diagnóstico de errores con origen (Vercel o Mercadona),datos,should,no,yes,ruta /api/mercadona?path=ping para comprobar el despliegue

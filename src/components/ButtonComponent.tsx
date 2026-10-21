@@ -1,32 +1,19 @@
-import { useState } from 'react';
-
 type ListButtonProps = {
     type: string,
+    isActive: boolean,
     filterFunction: (filteredItems: string) => void
 };
 
-const ButtonComponent = ({ filterFunction, type }: ListButtonProps) => {
-    const [activeButton, setActiveButton] = useState<string | null>(null);
-
-    const handleClick = () => {
-        // Desactivar la clase del botón anterior si estaba activo
-        if (activeButton) {
-            const prevActiveButton = document.querySelector(`button[type="${activeButton}"]`);
-            if (prevActiveButton) {
-                prevActiveButton.classList.remove('border-green-500');
-            }
-        }
-
-        // Activar o desactivar la clase del botón actual
-        setActiveButton(prevActiveButton => (prevActiveButton === type ? null : type));
-        filterFunction(type);
-    };
-
+// Chip de categoría (pasillo de Mercadona de los favoritos). El estado activo lo lleva App: solo hay una marcada a la vez
+const ButtonComponent = ({ filterFunction, type, isActive }: ListButtonProps) => {
     return (
         <button
-            className={`uppercase border-b-4 mx-3 border-black ${type === activeButton ? 'border-green-500 transition-all duration-300 ease-in-out' : 'transition-all duration-700 ease-in-out'}`}
-            style={{ backgroundPosition: type === activeButton ? '0 100%' : '100% 100%' }}
-            onClick={handleClick}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => filterFunction(type)}
+            className={`flex-none h-9 px-4 rounded-pill border text-sm font-medium transition-colors duration-200 ${isActive
+                ? "bg-accent border-accent text-on-accent"
+                : "bg-surface border-border text-text hover:border-accent"}`}
         >
             {type}
         </button>

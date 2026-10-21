@@ -1,69 +1,70 @@
 import { useState, useEffect } from "react";
 import { listItem, orderItem } from "../types/types";
+import { freeCacheSpace } from "../helpers/mercadona";
+
+function saveOrder(order: orderItem[]) {
+    const value = JSON.stringify(order);
+    try {
+        localStorage.setItem("order", value);
+    } catch {
+        // Si no hay espacio, se vacía la caché de Mercadona: la lista siempre tiene prioridad
+        freeCacheSpace();
+        try {
+            localStorage.setItem("order", value);
+        } catch {
+            // Sin espacio ni tras limpiar: se mantiene en memoria hasta el siguiente cambio
+        }
+    }
+}
 
 export default function useList() {
 
-    // Inicializar el estado order con un arreglo vacío si no hay nada en localStorage
+    // Inicializar el estado order con lo guardado en localStorage (o vacío)
     const [order, setOrder] = useState<orderItem[]>(() => {
-        const savedOrder = localStorage.getItem("order");
-        return savedOrder ? JSON.parse(savedOrder) : [];
-    });
-
-
-    // Recuperar order de localStorage al cargar la página
-    useEffect(() => {
-        const savedOrder = localStorage.getItem("order");
-        if (savedOrder) {
-            setOrder(JSON.parse(savedOrder));
+        try {
+            const savedOrder = localStorage.getItem("order");
+            const parsed = savedOrder ? JSON.parse(savedOrder) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
         }
-    }, []);
+    });
 
     // Guardar order en localStorage cada vez que cambie
     useEffect(() => {
-        localStorage.setItem("order", JSON.stringify(order));
+        saveOrder(order);
     }, [order]);
 
     const addItem = (item: listItem) => {
-        const itemExist = order.find(orderItem => orderItem.id === item.id);
-        if (itemExist) {
-            const updatedOrder = order.map(orderItem =>
-                orderItem.id === item.id
-                    ? { ...orderItem, quantity: orderItem.quantity + 1 }
-                    : orderItem
-            );
-            setOrder(updatedOrder);
-        } else {
-            const newItem = { ...item, quantity: 1 };
-            setOrder([...order, newItem]);
-        }
+        setOrder(prevOrder => {
+            const itemExist = prevOrder.find(orderItem => orderItem.id === item.id);
+            if (itemExist) {
+                return prevOrder.map(orderItem =>
+                    orderItem.id === item.id
+                        ? { ...orderItem, quantity: orderItem.quantity + 1 }
+                        : orderItem
+                );
+            }
+            return [...prevOrder, { ...item, quantity: 1 }];
+        });
+    };
+
+    const decreaseItem = (id: listItem['id']) => {
+        setOrder(prevOrder => prevOrder.map(orderItem =>
+            orderItem.id === id
+                ? { ...orderItem, quantity: Math.max(1, orderItem.quantity - 1) }
+                : orderItem
+        ));
     };
 
     const removeItem = (id: listItem['id']) => {
-        setOrder(order.filter(item => item.id !== id));
+        setOrder(prevOrder => prevOrder.filter(item => item.id !== id));
     };
-
-    const addOtherItem = (item: listItem) => {
-
-        const itemExist = order.find(orderItem => orderItem.name === item.name);
-        if (itemExist) {
-            const updatedOrder = order.map(orderItem =>
-                orderItem.name === item.name
-                    ? { ...orderItem, quantity: orderItem.quantity + 1 }
-                    : orderItem
-            );
-            setOrder(updatedOrder);
-        } else {
-            const newItem = { ...item, quantity: 1 };
-            setOrder([...order, newItem]);
-        }
-    };
-
-
 
     return {
         order,
         addItem,
-        removeItem,
-        addOtherItem
+        decreaseItem,
+        removeItem
     };
 }
