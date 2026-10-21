@@ -654,6 +654,20 @@ function thumbnailUrl(url: string, size: number): string {
     }
 }
 
+// Versión grande de la foto para el zoom: el CDN de Mercadona (imgix) la sirve al tamaño que se pida,
+// sin recortar (fit=max) y sin agrandar más que el original
+export function largeImageUrl(url: string, size = 900): string {
+    try {
+        const parsed = new URL(url);
+        parsed.searchParams.set("fit", "max");
+        parsed.searchParams.set("w", String(size));
+        parsed.searchParams.set("h", String(size));
+        return parsed.toString();
+    } catch {
+        return url;
+    }
+}
+
 async function blobToJpegDataUrl(blob: Blob, size: number): Promise<string | null> {
     if (!blob.type.startsWith("image/")) return null;
     const objectUrl = URL.createObjectURL(blob);

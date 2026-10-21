@@ -1,7 +1,7 @@
 import { Minus, Plus, Trash2 } from "lucide-react"
 import { formatCurrency } from "../helpers/formatPrice"
 import type { listItem, orderItem } from "../types/types"
-import { Thumb } from "./ProductRow"
+import Thumb from "./Thumb"
 
 type ListOrderProps = {
     order: orderItem[],
