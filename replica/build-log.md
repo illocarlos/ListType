@@ -53,3 +53,10 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - Limitación de iOS: la app instalada tiene su propio `localStorage`, distinto del de Safari.
 - App nativa (Capacitor) pendiente: requiere Mac con Xcode y cuenta de desarrollador de Apple.
 - Pruebas: 13/13 nuevas (novedades, manifest, sin conexión, aviso en iPhone) + 38/38 de regresión.
+
+## 2026-10-21 · Pestaña de novedades
+
+- Portada con pestañas: Favoritos, Novedades (con contador amarillo) y Pasillos.
+- Novedades: todos los productos marcados como novedad, agrupados por pasillo, con − n + y corazón. Al abrir la pestaña se carga el catálogo completo si hace falta, con su barra de progreso.
+- Los avisos de error de Mercadona salen en el buscador, en Novedades y en Pasillos.
+- Pruebas: 18/18 (novedades, pestañas, app instalable) + 38/38 de regresión.

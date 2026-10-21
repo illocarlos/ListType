@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { Heart, RefreshCw, Search, ShoppingBasket, X } from "lucide-react"
+import { Heart, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
 import useFavorites from "./hooks/useFavorites"
@@ -20,6 +20,7 @@ import Sheet from "./components/Sheet.tsx"
 import InstallHint from "./components/InstallHint.tsx"
 
 type Source = "todo" | "favoritos" | "mercadona"
+type HomeTab = "favoritos" | "novedades" | "pasillos"
 
 const PAGE_SIZE = 40
 // En "Todo", cuántos favoritos se enseñan antes que los de Mercadona
@@ -51,7 +52,31 @@ function App() {
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [selectedCheckbox, setSelectedCheckbox] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState<boolean>(false);
+  const [homeTab, setHomeTab] = useState<HomeTab>("favoritos");
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Novedades: hace falta el catálogo completo, así que se carga al abrir la pestaña
+  const { ensureIndex } = mercadona;
+  useEffect(() => {
+    if (homeTab === "novedades") ensureIndex();
+  }, [homeTab, ensureIndex]);
+
+  const novelties = useMemo(
+    () => mercadona.searchable
+      .filter(product => product.isNew)
+      .sort((a, b) => a.aisle.localeCompare(b.aisle, "es") || a.searchName.localeCompare(b.searchName, "es", { numeric: true })),
+    [mercadona.searchable]
+  );
+
+  const noveltiesByAisle = useMemo(() => {
+    const groups = new Map<string, SearchableProduct[]>();
+    for (const product of novelties) {
+      const list = groups.get(product.aisle) ?? [];
+      list.push(product);
+      groups.set(product.aisle, list);
+    }
+    return [...groups.entries()];
+  }, [novelties]);
 
 
   // Categorías de los favoritos (el pasillo de Mercadona de cada uno)
@@ -368,7 +393,88 @@ function App() {
           ) : (
             <div>
               <InstallHint />
-              <section aria-labelledby="favorites-title">
+
+              {/* Pestañas de la portada */}
+              <div role="tablist" aria-label="Secciones" className="mb-5 grid grid-cols-3 gap-1 rounded-md bg-surface-sunk p-1">
+                {([
+                  ["favoritos", "Favoritos", favorites.length],
+                  ["novedades", "Novedades", novelties.length],
+                  ["pasillos", "Pasillos", undefined],
+                ] as [HomeTab, string, number | undefined][]).map(([value, label, count]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    id={`tab-${value}`}
+                    aria-selected={homeTab === value}
+                    aria-controls={`panel-${value}`}
+                    onClick={() => setHomeTab(value)}
+                    className={`h-10 rounded-sm text-sm font-semibold transition-colors duration-200 ${homeTab === value
+                      ? "bg-surface text-text shadow-sm"
+                      : "text-muted hover:text-text"}`}
+                  >
+                    {label}
+                    {count !== undefined && count > 0 && (
+                      <span className={`ml-1.5 tabular text-xs ${value === "novedades" ? "rounded-pill bg-highlight text-on-highlight px-1.5 py-0.5" : ""}`}>{count}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {homeTab === "novedades" && (
+                <section id="panel-novedades" role="tabpanel" aria-labelledby="tab-novedades">
+                  <div className="flex items-baseline justify-between gap-3 mb-1">
+                    <h2 className="text-lg font-bold">Novedades de Mercadona</h2>
+                    {novelties.length > 0 && <span className="text-sm text-muted tabular">{novelties.length}</span>}
+                  </div>
+                  <p className="text-xs text-muted mb-4">
+                    Productos que Mercadona marca como nuevos o que han aparecido en los últimos 60 días.
+                  </p>
+
+                  {catalogStatus}
+
+                  {novelties.length === 0 ? (
+                    <div className="rounded-md bg-surface p-6 text-center">
+                      <Sparkles size={28} aria-hidden="true" className="mx-auto text-accent" />
+                      <p className="mt-2 font-semibold">
+                        {loadingCatalog ? "Buscando novedades…" : "Ahora mismo no hay novedades"}
+                      </p>
+                      {!loadingCatalog && (
+                        <p className="text-sm text-muted mt-1">
+                          Saldrán aquí en cuanto Mercadona añada productos nuevos. La app los detecta cada vez que carga el catálogo.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    noveltiesByAisle.map(([aisle, items]) => (
+                      <div key={aisle} className="mb-6">
+                        <h3 className="text-sm font-semibold text-muted mb-2">{aisle}</h3>
+                        <ul className="space-y-2">
+                          {items.map(product => {
+                            const item = toListItem(product);
+                            return (
+                              <ProductRow
+                                key={product.mercadonaId}
+                                item={item}
+                                detail={mercadonaDetail(product)}
+                                previousPrice={product.previousPrice}
+                                quantity={quantityOf(item.id)}
+                                onAdd={addItem}
+                                onDecrease={decreaseFromResults}
+                                favorite={isFavorite(item.id)}
+                                onToggleFavorite={toggleFavorite}
+                              />
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))
+                  )}
+                </section>
+              )}
+
+              {homeTab === "favoritos" && (
+              <section id="panel-favoritos" role="tabpanel" aria-labelledby="tab-favoritos">
                 <div className="flex items-baseline justify-between gap-3 mb-3">
                   <h2 id="favorites-title" className="text-lg font-bold">Tus favoritos</h2>
                   {favorites.length > 0 && (
@@ -404,7 +510,10 @@ function App() {
                   </>
                 )}
               </section>
+              )}
 
+              {homeTab === "pasillos" && (
+              <div id="panel-pasillos" role="tabpanel" aria-labelledby="tab-pasillos">
               <MercadonaCatalog
                 wh={mercadona.wh}
                 groups={mercadona.groups}
@@ -418,6 +527,8 @@ function App() {
                 isFavorite={isFavorite}
                 onToggleFavorite={toggleFavorite}
               />
+              </div>
+              )}
             </div>
           )}
         </main>

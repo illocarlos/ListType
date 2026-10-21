@@ -69,7 +69,7 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
     };
 
     return (
-        <section aria-labelledby="explore-title" className="mt-8">
+        <section aria-labelledby="explore-title">
             <div className="flex items-baseline justify-between gap-3 mb-3">
                 <h2 id="explore-title" className="text-lg font-bold">Pasillos de Mercadona</h2>
                 <button type="button" className="text-sm text-accent underline underline-offset-2" onClick={() => setEditingWh(!editingWh)}>
