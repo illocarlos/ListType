@@ -23,6 +23,7 @@ Método: axe-core 4.14 (WCAG 2.2 A/AA + buenas prácticas) en 7 pantallas con m�
 | La app instalada bloqueaba el giro de pantalla | móvil fijo en horizontal (soportes) | quitado `orientation` del manifest |
 | Pegar "41 300" dejaba "4130" | todos | el campo filtra dígitos antes de limitar a 5 |
 | Escribir el código postal cuesta a algunas personas | motricidad, comprensión | botón "Usar mi ubicación" (con permiso) |
+| Zoom de foto solo con "mantener pulsado" (difícil con temblor o lector de pantalla) | motricidad, lector de pantalla | además, toque corto la deja abierta y es un botón usable con teclado |
 | Instalar la app exige pasos escondidos | comprensión | botón "Instalar la app" en Android/ordenador; pasos numerados en iPhone |
 
 ## Ya estaba bien (no se toca)

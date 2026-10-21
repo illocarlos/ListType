@@ -1,6 +1,7 @@
 import { Heart, Minus, Plus } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
 import type { listItem } from "../types/types";
+import Thumb from "./Thumb";
 
 type ProductRowProps = {
     item: listItem,
@@ -12,28 +13,6 @@ type ProductRowProps = {
     favorite?: boolean,
     onToggleFavorite?: (item: listItem) => void,
 }
-
-export const Thumb = ({ item, size = "md" }: { item: listItem, size?: "sm" | "md" }) => {
-    const box = size === "md" ? "h-14 w-14" : "h-12 w-12";
-    if (item.image) {
-        return (
-            <img
-                src={item.image}
-                alt=""
-                loading="lazy"
-                className={`${box} flex-none rounded-sm bg-surface object-contain`}
-            />
-        );
-    }
-    return (
-        <span
-            aria-hidden="true"
-            className={`${box} flex-none rounded-sm bg-surface-sunk text-on-accent-soft grid place-items-center text-lg font-bold`}
-        >
-            {item.name.trim().charAt(0).toUpperCase()}
-        </span>
-    );
-};
 
 // Fila de producto pensada para todo el mundo:
 // nombre completo (sin cortar), textos de 14 px como mínimo, botones de 44 px y "Añadir" escrito.
