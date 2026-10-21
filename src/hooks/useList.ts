@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listItem, orderItem } from "../types/types";
 import { freeCacheSpace } from "../helpers/mercadona";
 
@@ -61,10 +61,29 @@ export default function useList() {
         setOrder(prevOrder => prevOrder.filter(item => item.id !== id));
     };
 
+    // Actualiza precio, foto, formato y novedad de los productos de Mercadona ya apuntados
+    // con datos más recientes. La cantidad no se toca.
+    const refreshOrder = useCallback((fresh: Map<number, listItem>) => {
+        setOrder(prevOrder => {
+            let changed = false;
+            const next = prevOrder.map(orderItem => {
+                const update = fresh.get(orderItem.id);
+                if (!update) return orderItem;
+                if (update.price === orderItem.price && update.image === orderItem.image
+                    && update.packaging === orderItem.packaging && update.unitPrice === orderItem.unitPrice
+                    && update.name === orderItem.name && update.isNew === orderItem.isNew) return orderItem;
+                changed = true;
+                return { ...orderItem, ...update, quantity: orderItem.quantity };
+            });
+            return changed ? next : prevOrder;
+        });
+    }, []);
+
     return {
         order,
         addItem,
         decreaseItem,
-        removeItem
+        removeItem,
+        refreshOrder
     };
 }

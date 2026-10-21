@@ -44,7 +44,7 @@ const itemDetail = (item: listItem) =>
   [item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
-  const { order, addItem, decreaseItem, removeItem } = useList();
+  const { order, addItem, decreaseItem, removeItem, refreshOrder } = useList();
   const { favorites, isFavorite, toggleFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
@@ -110,6 +110,20 @@ function App() {
     }
     if (fresh.size) refreshFavorites(fresh);
   }, [mercadona.searchable, favorites, refreshFavorites]);
+
+  // Igual con la lista: los productos de Mercadona ya apuntados cogen el precio nuevo (la cantidad no cambia)
+  useEffect(() => {
+    const wanted = new Set(order.map(item => item.mercadonaId).filter(Boolean));
+    if (wanted.size === 0) return;
+    const fresh = new Map<number, listItem>();
+    for (const product of mercadona.searchable) {
+      if (wanted.has(product.mercadonaId)) {
+        const item = toListItem(product);
+        fresh.set(item.id, item);
+      }
+    }
+    if (fresh.size) refreshOrder(fresh);
+  }, [mercadona.searchable, order, refreshOrder]);
 
   // Cantidad de cada producto en la lista, para pintar − n + en los resultados
   const quantities = useMemo(() => new Map(order.map(item => [item.id, item.quantity])), [order]);

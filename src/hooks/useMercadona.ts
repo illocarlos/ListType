@@ -7,6 +7,7 @@ import {
     indexAllAisles,
     MercadonaError,
     normalizeText,
+    refreshStaleAisles,
     resolvePostalCode,
     setWarehouse,
     ZoneError,
@@ -80,6 +81,65 @@ export default function useMercadona() {
             setIndexState(result.done === result.total && result.failed === 0 ? "done" : "stopped");
         });
     }, [wh, groups]);
+
+    // ---------- Actualización silenciosa en segundo plano ----------
+    // Al abrir la app, al volver a ella y cada hora con la app a la vista: si hay pasillos con datos
+    // de más de 24 h, se vuelven a pedir por detrás, sin barra de progreso, mientras se usa la app.
+    // No se hace con "ahorro de datos" activado ni mientras corre la carga completa del buscador.
+    const latest = useRef({ wh, groups, groupsState, indexState });
+    latest.current = { wh, groups, groupsState, indexState };
+    const refreshingRef = useRef<boolean>(false);
+
+    const backgroundRefresh = useCallback(async () => {
+        const current = latest.current;
+        if (refreshingRef.current || current.groupsState !== "ready" || current.indexState === "running") return;
+        const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+        if (connection?.saveData) return;
+
+        refreshingRef.current = true;
+        const run = runRef.current;
+        try {
+            let freshGroups = current.groups;
+            try {
+                const fetched = await fetchGroups(current.wh);
+                if (JSON.stringify(fetched) !== JSON.stringify(current.groups)) setGroups(fetched);
+                freshGroups = fetched;
+            } catch {
+                // sin conexión: se sigue con lo que había
+            }
+            if (runRef.current !== run) return;
+            await refreshStaleAisles(
+                current.wh,
+                freshGroups,
+                loaded => setPool(previous => {
+                    const next = new Map(previous);
+                    for (const product of loaded) next.set(product.mercadonaId, product);
+                    return next;
+                }),
+                () => runRef.current !== run
+            );
+        } finally {
+            refreshingRef.current = false;
+        }
+    }, []);
+
+    useEffect(() => {
+        if (groupsState === "ready") backgroundRefresh();
+    }, [groupsState, backgroundRefresh]);
+
+    useEffect(() => {
+        const whenVisible = () => {
+            if (document.visibilityState === "visible") backgroundRefresh();
+        };
+        document.addEventListener("visibilitychange", whenVisible);
+        window.addEventListener("online", whenVisible);
+        const timer = window.setInterval(whenVisible, 60 * 60 * 1000);
+        return () => {
+            document.removeEventListener("visibilitychange", whenVisible);
+            window.removeEventListener("online", whenVisible);
+            window.clearInterval(timer);
+        };
+    }, [backgroundRefresh]);
 
     // Carga completa del catálogo: se pide al enfocar o escribir en el buscador
     const ensureIndex = useCallback(() => setWantIndex(true), []);
