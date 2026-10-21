@@ -1,5 +1,5 @@
 import { formatCurrency } from "./formatPrice";
-import type { listItem, MercadonaGroup, MercadonaProduct } from "../types/types";
+import type { listItem, MercadonaAisle, MercadonaGroup, MercadonaProduct } from "../types/types";
 
 // Todas las peticiones pasan por el proxy de Vercel (api/mercadona.js) o, en local, por el proxy de Vite
 const API_BASE = "/api/mercadona";
@@ -484,6 +484,14 @@ export async function fetchGroups(wh: string, force = false): Promise<MercadonaG
     }
 }
 
+// Descarga un pasillo de Mercadona y lo guarda en caché (si falla, lanza el error)
+async function downloadAisle(wh: string, aisleId: number, aisleName: string): Promise<MercadonaProduct[]> {
+    const key = `${CACHE_PREFIX}${wh}:cat:${aisleId}`;
+    const products = markNewProducts(wh, aisleId, parseAisle(await getJson(`categories/${aisleId}/`, wh), aisleName));
+    writeCache(key, products);
+    return products;
+}
+
 export async function fetchAisle(wh: string, aisleId: number, aisleName: string, force = false): Promise<MercadonaProduct[]> {
     const key = `${CACHE_PREFIX}${wh}:cat:${aisleId}`;
     if (!force) {
@@ -491,9 +499,7 @@ export async function fetchAisle(wh: string, aisleId: number, aisleName: string,
         if (cached) return cached;
     }
     try {
-        const products = markNewProducts(wh, aisleId, parseAisle(await getJson(`categories/${aisleId}/`, wh), aisleName));
-        writeCache(key, products);
-        return products;
+        return await downloadAisle(wh, aisleId, aisleName);
     } catch (error) {
         const stale = readCache<MercadonaProduct[]>(key, true);
         if (stale) return stale;
@@ -503,6 +509,36 @@ export async function fetchAisle(wh: string, aisleId: number, aisleName: string,
 
 function isAisleCached(wh: string, aisleId: number): boolean {
     return readCache<MercadonaProduct[]>(`${CACHE_PREFIX}${wh}:cat:${aisleId}`) !== null;
+}
+
+// Pasillos ya descargados alguna vez cuyos datos tienen más de 24 h
+function staleAisles(wh: string, groups: MercadonaGroup[]): MercadonaAisle[] {
+    return groups.flatMap(group => group.aisles).filter(aisle => {
+        const key = `${CACHE_PREFIX}${wh}:cat:${aisle.id}`;
+        return readCache<MercadonaProduct[]>(key) === null && readCache<MercadonaProduct[]>(key, true) !== null;
+    });
+}
+
+// Actualización silenciosa: vuelve a pedir solo los pasillos caducados que el usuario ya tenía,
+// de uno en uno y con pausa. Para en cuanto Mercadona pide calma (429) o se cancela.
+export async function refreshStaleAisles(
+    wh: string,
+    groups: MercadonaGroup[],
+    onAisle: (products: MercadonaProduct[]) => void,
+    isCancelled: () => boolean
+): Promise<number> {
+    let refreshed = 0;
+    for (const aisle of staleAisles(wh, groups)) {
+        if (isCancelled()) break;
+        try {
+            onAisle(await downloadAisle(wh, aisle.id, aisle.name));
+            refreshed++;
+        } catch (error) {
+            if (error instanceof MercadonaError && (error.status === 429 || error.origin !== "mercadona")) break;
+        }
+        await wait(400);
+    }
+    return refreshed;
 }
 
 const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
