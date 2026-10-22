@@ -61,7 +61,7 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
 
                 doc.setFontSize(NAME_SIZE);
                 const nameLines: string[] = doc.splitTextToSize(
-                    `${index + 1}. ${item.name} - Cantidad: ${item.quantity}`,
+                    `${index + 1}. ${item.name} - Cantidad: ${item.quantity}${item.byWeight ? ' kg aprox.' : ''}`,
                     pageWidth - textX - MARGIN - priceWidth
                 );
                 const detail = [item.packaging, item.unitPrice].filter(Boolean).join(' · ');

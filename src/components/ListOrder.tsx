@@ -49,25 +49,25 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails }: 
                                         type="button"
                                         onClick={() => decreaseItem(item.id)}
                                         disabled={item.quantity <= 1}
-                                        aria-label={`Quitar una unidad de ${item.name}`}
+                                        aria-label={`Quitar ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
                                         className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk disabled:opacity-40 disabled:hover:bg-transparent"
                                     >
                                         <Minus size={20} aria-hidden="true" />
                                     </button>
                                     <span className="min-w-[2.25rem] text-center text-base font-bold tabular">
-                                        X{item.quantity}
-                                        <span className="sr-only"> unidades</span>
+                                        {item.byWeight ? `${item.quantity} kg` : `X${item.quantity}`}
+                                        <span className="sr-only">{item.byWeight ? " aproximados" : " unidades"}</span>
                                     </span>
                                     <button
                                         type="button"
                                         onClick={() => addItem(item)}
-                                        aria-label={`Añadir una unidad de ${item.name}`}
+                                        aria-label={`Añadir ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
                                         className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
                                     >
                                         <Plus size={20} aria-hidden="true" />
                                     </button>
                                 </div>
-                                <span className="text-base text-muted tabular">total: {formatCurrency(item.price * item.quantity)}</span>
+                                <span className="text-base text-muted tabular">total{item.byWeight ? " aprox." : ""}: {formatCurrency(item.price * item.quantity)}</span>
                                 {onOpenDetails && item.mercadonaId && (
                                     <button
                                         type="button"

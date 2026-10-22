@@ -65,7 +65,12 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
 
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="tabular">
-                        {item.price > 0 && <span className="text-base font-bold">{formatCurrency(item.price)}</span>}
+                        {item.price > 0 && (
+                            <span className="text-base font-bold">
+                                {formatCurrency(item.price)}
+                                {item.byWeight && <span className="text-sm font-semibold"> /kg<span className="sr-only">, a granel</span></span>}
+                            </span>
+                        )}
                         {previousPrice && previousPrice > item.price && item.price > 0 ? (
                             <>
                                 <span className="ml-2 text-sm text-muted">
@@ -97,19 +102,20 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                             <button
                                 type="button"
                                 onClick={() => onDecrease(item)}
-                                aria-label={quantity === 1 ? `Quitar ${item.name} de la lista` : `Quitar una unidad de ${item.name}`}
+                                aria-label={quantity === 1 ? `Quitar ${item.name} de la lista` : `Quitar ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
                                 className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
                             >
                                 <Minus size={20} aria-hidden="true" />
                             </button>
                             <span className="min-w-[1.75rem] text-center text-lg font-bold tabular">
                                 {quantity}
-                                <span className="sr-only"> en la lista</span>
+                                {item.byWeight && <span className="text-sm font-semibold"> kg</span>}
+                                <span className="sr-only">{item.byWeight ? " aproximados" : ""} en la lista</span>
                             </span>
                             <button
                                 type="button"
                                 onClick={() => onAdd(item)}
-                                aria-label={`Añadir una unidad de ${item.name}`}
+                                aria-label={`Añadir ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
                                 className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
                             >
                                 <Plus size={20} aria-hidden="true" />

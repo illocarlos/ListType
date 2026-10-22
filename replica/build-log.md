@@ -125,3 +125,15 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - El usuario veía demasiadas rebajas. Causa probable: el lector tolerante recoge cualquier producto de la respuesta (puede traer otras secciones) y no se exigía precio anterior.
 - Ahora Rebajas solo muestra productos con `previousPrice > price`, con el descuento visible ("−9 %"), ordenados por descuento dentro de cada pasillo. El contador y el aviso de favoritos usan el mismo criterio.
 - Pruebas: 30/30 (incluye productos sin precio anterior y con precio anterior menor, que quedan fuera) + 125 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · Contraste con datos reales
+
+- Fuentes: fixtures de respuestas reales de `mercapy` y el volcado público de `jccsoft/Mercadona` (5.269 entradas, 4.942 productos distintos, marzo de 2024).
+- **Granel** (`selling_method: 1`, 12 productos reales): `unit_price` no vale (1.084,05 € el gambón, o el precio de una bandeja de 200 g); el precio real es `bulk_price` por kilo. La app muestra "10,95 € /kg", cuenta en kilos ("2 kg", "kg aprox." en PDF y WhatsApp) y el lector de pantalla dice "a granel" y "un kilo". Sin precio anterior en granel (comparaba con el `unit_price` disparatado).
+- `price_decreased` viene siempre en falso aunque haya bajada: no se usa (ya no se usaba). Bajadas reales en el volcado: 116 productos (2,3 %), ninguno con "precio anterior" más barato.
+- Novedad también con `is_new_arrival` a nivel de producto (campo de la ficha real).
+- Ficha: la foto `zoom` real es de 3.600 px; se pide a 900 px.
+- `previous_unit_price` puede traer espacios delante: se recortan.
+- Prueba con el catálogo real completo pasado por la app: 5.255 entradas comparadas una a una (precio, precio anterior, granel, nombre, foto) con 0 discrepancias; un producto que está en dos pasillos sale una vez en el buscador.
+- Sin verificar con respuesta real: la forma exacta de `home/price-drops/` y `products/<id>/similars/` (el lector tolerante y el filtro `previousPrice > price` cubren las variantes).
+- Pruebas: 40/40 + 9/9 con datos reales + 125 de regresión; auditoría sin problemas.
