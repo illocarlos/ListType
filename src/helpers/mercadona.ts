@@ -7,10 +7,10 @@ const IMG_PROXY = "/api/mercadona-img";
 const CACHE_PREFIX = "mercadona:v1:";
 const WAREHOUSE_KEY = `${CACHE_PREFIX}wh`;
 const TTL_MS = 24 * 60 * 60 * 1000;
-// Rebajas y novedades: el móvil las renueva cada 12 h, lo mismo que tarda el CDN de Vercel en renovar
-// su copia (preguntar más a menudo devolvería la misma copia). Si un producto llega también por su
-// pasillo, manda el precio descargado más recientemente (fetchedAt), no el camino por el que llegó.
-const HOME_TTL_MS = 12 * 60 * 60 * 1000;
+// Rebajas y novedades: el móvil las renueva cada 24 h, igual que los pasillos (a petición del dueño: se
+// publican a diario). El CDN de Vercel renueva su copia cada 12 h. Si un producto llega también por su
+// pasillo, manda el precio con contenido más reciente (fetchedAt), no el camino por el que llegó.
+const HOME_TTL_MS = 24 * 60 * 60 * 1000;
 // Si los precios guardados tienen más de esto y no se han podido renovar, se avisa
 export const STALE_WARNING_MS = 48 * 60 * 60 * 1000;
 // Tras un rechazo o fallo de Mercadona, las renovaciones automáticas esperan este tiempo
@@ -742,7 +742,7 @@ async function cachedJson<T>(key: string, download: () => Promise<T>, force = fa
 
 export type HomeList = "price-drops" | "new-arrivals";
 
-// Rebajas o novedades oficiales de Mercadona para la zona (caché de 12 h en el móvil; ver HOME_TTL_MS),
+// Rebajas o novedades oficiales de Mercadona para la zona (caché de 24 h en el móvil; ver HOME_TTL_MS),
 // con la fecha de descarga en cada producto para comparar con la copia del pasillo
 export async function fetchHomeList(wh: string, kind: HomeList, force = false): Promise<MercadonaProduct[]> {
     const entry = await cachedEntry(`${CACHE_PREFIX}${wh}:home:${kind}`, async () => {
