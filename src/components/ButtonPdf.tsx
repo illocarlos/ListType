@@ -8,11 +8,15 @@ type ButtonPdfProps = {
     order: orderItem[]
 }
 
-// Medidas en milímetros (A4: 210 x 297)
-const MARGIN = 20;
+// Medidas en milímetros (A4: 210 x 297). "Modo tienda": letra grande y una casilla
+// por producto para tacharlo a boli al meterlo en el carro.
+const MARGIN = 18;
 const TOP = 20;
-const IMAGE_SIZE = 12;
-const LINE_HEIGHT = 6;
+const CHECKBOX = 7;
+const IMAGE_SIZE = 14;
+const LINE_HEIGHT = 7;
+const NAME_SIZE = 14;
+const DETAIL_SIZE = 11;
 
 const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
     const [generating, setGenerating] = useState(false);
@@ -40,25 +44,29 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
             // Título
             doc.setFontSize(16);
             doc.text('Lista de Pedidos churriiiiiii', MARGIN, TOP);
-            doc.setFontSize(9);
+            doc.setFontSize(11);
             doc.text(new Date().toLocaleDateString('es-ES'), pageWidth - MARGIN, TOP, { align: 'right' });
+            doc.setTextColor(90);
+            doc.text('Marca cada casilla al meterlo en el carro.', MARGIN, TOP + 7);
+            doc.setTextColor(0);
 
             // Datos
-            let yPosition = 40;
+            let yPosition = 42;
 
             order.forEach((item, index) => {
                 const image = images[index];
-                const textX = image ? MARGIN + IMAGE_SIZE + 4 : MARGIN;
-                const priceWidth = 28;
+                const imageX = MARGIN + CHECKBOX + 4;
+                const textX = image ? imageX + IMAGE_SIZE + 4 : imageX;
+                const priceWidth = 30;
 
-                doc.setFontSize(12);
+                doc.setFontSize(NAME_SIZE);
                 const nameLines: string[] = doc.splitTextToSize(
                     `${index + 1}. ${item.name} - Cantidad: ${item.quantity}`,
                     pageWidth - textX - MARGIN - priceWidth
                 );
                 const detail = [item.packaging, item.unitPrice].filter(Boolean).join(' · ');
-                const textHeight = nameLines.length * LINE_HEIGHT + (detail ? 5 : 0);
-                const rowHeight = Math.max(image ? IMAGE_SIZE + 2 : 0, textHeight) + 4;
+                const textHeight = nameLines.length * LINE_HEIGHT + (detail ? 6 : 0);
+                const rowHeight = Math.max(image ? IMAGE_SIZE + 2 : CHECKBOX + 2, textHeight) + 5;
 
                 // Salto de página si la línea no cabe
                 if (yPosition + rowHeight > bottom) {
@@ -66,11 +74,16 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
                     yPosition = TOP;
                 }
 
+                // Casilla para tachar
+                doc.setDrawColor(40);
+                doc.setLineWidth(0.5);
+                doc.rect(MARGIN, yPosition - 5.5, CHECKBOX, CHECKBOX);
+
                 if (image) {
-                    doc.addImage(image, 'JPEG', MARGIN, yPosition - 5, IMAGE_SIZE, IMAGE_SIZE);
+                    doc.addImage(image, 'JPEG', imageX, yPosition - 6, IMAGE_SIZE, IMAGE_SIZE);
                 }
 
-                doc.setFontSize(12);
+                doc.setFontSize(NAME_SIZE);
                 doc.text(nameLines, textX, yPosition);
 
                 if (item.price > 0) {
@@ -78,9 +91,9 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
                 }
 
                 if (detail) {
-                    doc.setFontSize(9);
-                    doc.setTextColor(110);
-                    doc.text(detail, textX, yPosition + (nameLines.length - 1) * LINE_HEIGHT + 5);
+                    doc.setFontSize(DETAIL_SIZE);
+                    doc.setTextColor(90);
+                    doc.text(detail, textX, yPosition + (nameLines.length - 1) * LINE_HEIGHT + 6);
                     doc.setTextColor(0);
                 }
 
@@ -94,8 +107,9 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
                 yPosition = TOP;
             }
             doc.setDrawColor(16, 185, 129);
+            doc.setLineWidth(0.3);
             doc.line(MARGIN, yPosition - 2, pageWidth - MARGIN, yPosition - 2);
-            doc.setFontSize(12);
+            doc.setFontSize(NAME_SIZE);
             doc.text(`Total aprox: ${formatCurrency(total)}`, pageWidth - MARGIN, yPosition + 5, { align: 'right' });
 
             doc.save('pedido.pdf');

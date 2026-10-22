@@ -357,61 +357,6 @@ function parseProduct(rawProduct: unknown, subcategory: string, aisle: string): 
     };
 }
 
-// ---------- Novedades detectadas por la app ----------
-// Mercadona no publica la fecha de lanzamiento. La app apunta el día en que ve cada producto por primera vez
-// y el día en que vio cada pasillo por primera vez. Un producto que aparece en un pasillo ya conocido
-// es novedad durante NEW_DAYS días. Va en una clave aparte para que la limpieza de caché no la borre.
-
-const SEEN_PREFIX = "mercadona-seen:v1:";
-const NEW_DAYS = 60;
-
-type SeenStore = { aisles: Record<string, number>, products: Record<string, number> };
-
-const today = () => Math.floor(Date.now() / 86_400_000);
-
-function readSeen(wh: string): SeenStore {
-    try {
-        const raw = localStorage.getItem(`${SEEN_PREFIX}${wh}`);
-        const parsed = raw ? JSON.parse(raw) : null;
-        if (parsed && typeof parsed === "object" && parsed.aisles && parsed.products) return parsed as SeenStore;
-    } catch {
-        // dato corrupto: se empieza de cero
-    }
-    return { aisles: {}, products: {} };
-}
-
-function writeSeen(wh: string, store: SeenStore) {
-    try {
-        localStorage.setItem(`${SEEN_PREFIX}${wh}`, JSON.stringify(store));
-    } catch {
-        // sin espacio: se pierde solo la detección de novedades
-    }
-}
-
-// Apunta los productos vistos y marca como novedad los que han aparecido hace menos de NEW_DAYS días
-function markNewProducts(wh: string, aisleId: number, products: MercadonaProduct[]): MercadonaProduct[] {
-    const store = readSeen(wh);
-    const day = today();
-    const aisleKey = String(aisleId);
-    const firstVisit = store.aisles[aisleKey] === undefined;
-    if (firstVisit) store.aisles[aisleKey] = day;
-    const aisleBaseline = store.aisles[aisleKey];
-
-    let changed = firstVisit;
-    const marked = products.map(product => {
-        if (store.products[product.mercadonaId] === undefined) {
-            store.products[product.mercadonaId] = day;
-            changed = true;
-        }
-        const firstSeen = store.products[product.mercadonaId];
-        const appearedLater = firstSeen > aisleBaseline;
-        const recent = day - firstSeen <= NEW_DAYS;
-        return appearedLater && recent && !product.isNew ? { ...product, isNew: true } : product;
-    });
-    if (changed) writeSeen(wh, store);
-    return marked;
-}
-
 function parseAisle(json: unknown, aisleName: string): MercadonaProduct[] {
     const root = asObj(json);
     if (!root) return [];
@@ -487,7 +432,7 @@ export async function fetchGroups(wh: string, force = false): Promise<MercadonaG
 // Descarga un pasillo de Mercadona y lo guarda en caché (si falla, lanza el error)
 async function downloadAisle(wh: string, aisleId: number, aisleName: string): Promise<MercadonaProduct[]> {
     const key = `${CACHE_PREFIX}${wh}:cat:${aisleId}`;
-    const products = markNewProducts(wh, aisleId, parseAisle(await getJson(`categories/${aisleId}/`, wh), aisleName));
+    const products = parseAisle(await getJson(`categories/${aisleId}/`, wh), aisleName);
     writeCache(key, products);
     return products;
 }
@@ -595,6 +540,141 @@ export async function indexAllAisles(
 }
 
 // Todos los productos de los pasillos ya cargados (para el buscador)
+// ---------- Rebajas, novedades, ficha y parecidos ----------
+// No hay documentación de estas respuestas: se buscan los productos dentro del JSON
+// esté donde esté (cualquier objeto con id, nombre y price_instructions).
+
+function categoryNames(product: Obj): { aisle: string, subcategory: string } {
+    const names: string[] = [];
+    let level = asArr(product.categories);
+    for (let depth = 0; depth < 3 && level.length > 0; depth++) {
+        const first = asObj(level[0]);
+        if (!first) break;
+        const name = str(first.name);
+        if (name) names.push(name);
+        level = asArr(first.categories);
+    }
+    return { aisle: names[1] || names[0] || "Mercadona", subcategory: names[2] || names[1] || names[0] || "Mercadona" };
+}
+
+function findProducts(json: unknown, limit = 400): MercadonaProduct[] {
+    const found: MercadonaProduct[] = [];
+    const seen = new Set<string>();
+    const visit = (value: unknown, depth: number) => {
+        if (depth > 8 || found.length >= limit) return;
+        if (Array.isArray(value)) {
+            for (const item of value) visit(item, depth + 1);
+            return;
+        }
+        const object = asObj(value);
+        if (!object) return;
+        if (object.price_instructions && (object.display_name || object.name) && object.id !== undefined) {
+            const { aisle, subcategory } = categoryNames(object);
+            const product = parseProduct(object, subcategory, aisle);
+            if (product && !seen.has(product.mercadonaId)) {
+                seen.add(product.mercadonaId);
+                found.push(product);
+            }
+            return;
+        }
+        for (const child of Object.values(object)) visit(child, depth + 1);
+    };
+    visit(json, 0);
+    return found;
+}
+
+async function cachedJson<T>(key: string, download: () => Promise<T>, force = false): Promise<T> {
+    if (!force) {
+        const cached = readCache<T>(key);
+        if (cached !== null) return cached;
+    }
+    try {
+        const data = await download();
+        writeCache(key, data);
+        return data;
+    } catch (error) {
+        const stale = readCache<T>(key, true);
+        if (stale !== null) return stale;
+        throw error;
+    }
+}
+
+export type HomeList = "price-drops" | "new-arrivals";
+
+// Rebajas o novedades oficiales de Mercadona para la zona (caché de 24 h, como los pasillos)
+export function fetchHomeList(wh: string, kind: HomeList, force = false): Promise<MercadonaProduct[]> {
+    return cachedJson(`${CACHE_PREFIX}${wh}:home:${kind}`, async () => findProducts(await getJson(`home/${kind}/`, wh)), force);
+}
+
+export type ProductDetail = {
+    mercadonaId: string,
+    product: MercadonaProduct | null,
+    photos: string[],
+    brand: string,
+    origin: string,
+    description: string,
+    ingredients: string,
+    allergens: string,
+    storage: string,
+    usage: string,
+};
+
+// Quita etiquetas HTML y espacios sobrantes de los textos de la ficha
+function plainText(value: unknown): string {
+    const text = str(value);
+    if (!text) return "";
+    return text
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/(p|li|div)>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, "\"")
+        .replace(/&#39;/g, "'")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n\s*\n+/g, "\n")
+        .trim();
+}
+
+function parseDetail(json: unknown, mercadonaId: string): ProductDetail {
+    const root = asObj(json) ?? {};
+    const details = asObj(root.details) ?? {};
+    const nutrition = asObj(root.nutrition_information) ?? {};
+    const photos = asArr(root.photos)
+        .map(asObj)
+        .map(photo => safeImageUrl(photo?.zoom) || safeImageUrl(photo?.regular) || safeImageUrl(photo?.thumbnail))
+        .filter(Boolean);
+    const { aisle, subcategory } = categoryNames(root);
+    const pick = (...values: unknown[]) => values.map(plainText).find(Boolean) ?? "";
+    return {
+        mercadonaId,
+        product: parseProduct(root, subcategory, aisle),
+        photos,
+        brand: pick(details.brand, root.brand),
+        origin: pick(details.origin, root.origin),
+        description: pick(details.description, details.legal_name, root.legal_name),
+        ingredients: pick(nutrition.ingredients, details.ingredients, root.ingredients),
+        allergens: pick(nutrition.allergens, details.allergens, root.allergens),
+        storage: pick(details.storage_instructions, root.storage_instructions),
+        usage: pick(details.usage_instructions, root.usage_instructions),
+    };
+}
+
+const SAFE_ID = /^\d{1,8}(\.\d{1,3})?$/;
+
+// Ficha completa de un producto: solo se pide cuando alguien la abre
+export async function fetchProductDetail(wh: string, mercadonaId: string): Promise<ProductDetail> {
+    if (!SAFE_ID.test(mercadonaId)) throw new MercadonaError(400);
+    return cachedJson(`${CACHE_PREFIX}${wh}:detail:${mercadonaId}`, async () => parseDetail(await getJson(`products/${mercadonaId}/`, wh), mercadonaId));
+}
+
+// Productos parecidos según Mercadona (para sugerir alternativas más baratas)
+export async function fetchSimilars(wh: string, mercadonaId: string): Promise<MercadonaProduct[]> {
+    if (!SAFE_ID.test(mercadonaId)) throw new MercadonaError(400);
+    return cachedJson(`${CACHE_PREFIX}${wh}:similars:${mercadonaId}`, async () =>
+        findProducts(await getJson(`products/${mercadonaId}/similars/`, wh)).filter(product => product.mercadonaId !== mercadonaId));
+}
+
 export function getCachedProducts(wh: string): MercadonaProduct[] {
     const prefix = `${CACHE_PREFIX}${wh}:cat:`;
     const all: MercadonaProduct[] = [];

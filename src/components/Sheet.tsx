@@ -10,6 +10,9 @@ type SheetProps = {
     variant?: "bottom" | "full",
 }
 
+// Diálogos abiertos, el último arriba: solo ese atiende al teclado (p. ej. la ficha abierta desde la lista)
+const openSheets: symbol[] = [];
+
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 // Diálogo accesible: el foco entra al abrir, no se escapa con el tabulador y vuelve al botón que lo abrió
@@ -20,10 +23,13 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProp
         if (!open) return;
         const opener = document.activeElement as HTMLElement | null;
         const panel = panelRef.current;
+        const self = Symbol("sheet");
+        openSheets.push(self);
         // El foco va al propio diálogo: el lector de pantalla lee su título
         panel?.focus();
 
         const onKey = (event: KeyboardEvent) => {
+            if (openSheets[openSheets.length - 1] !== self) return;
             if (event.key === "Escape") {
                 onClose();
                 return;
@@ -52,14 +58,16 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProp
         document.body.style.overflow = "hidden";
         return () => {
             document.removeEventListener("keydown", onKey);
-            document.body.style.overflow = previousOverflow;
+            const index = openSheets.indexOf(self);
+            if (index >= 0) openSheets.splice(index, 1);
+            if (openSheets.length === 0) document.body.style.overflow = previousOverflow;
             opener?.focus?.();
         };
     }, [open, onClose]);
 
     if (!open) return null;
 
-    const titleId = `sheet-${variant}-title`;
+    const titleId = `sheet-${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-title`;
     const panelShape = variant === "full"
         ? "inset-0 safe-top md:pt-0 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[440px] md:max-h-[85vh] md:rounded-lg"
         : "inset-x-0 bottom-0 rounded-t-lg md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[440px] md:rounded-lg";

@@ -1,4 +1,4 @@
-import { Minus, Plus, Trash2 } from "lucide-react"
+import { Info, Minus, Plus, Trash2 } from "lucide-react"
 import { formatCurrency } from "../helpers/formatPrice"
 import type { listItem, orderItem } from "../types/types"
 import Thumb from "./Thumb"
@@ -7,10 +7,11 @@ type ListOrderProps = {
     order: orderItem[],
     addItem: (item: listItem) => void,
     decreaseItem: (id: listItem['id']) => void,
-    removeItem: (id: listItem['id']) => void
+    removeItem: (id: listItem['id']) => void,
+    onOpenDetails?: (item: listItem) => void
 }
 
-const ListOrder = ({ order, addItem, decreaseItem, removeItem }: ListOrderProps) => {
+const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails }: ListOrderProps) => {
     if (order.length === 0) {
         return (
             <div className="px-4 py-10 text-center">
@@ -67,6 +68,16 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem }: ListOrderProps)
                                     </button>
                                 </div>
                                 <span className="text-base text-muted tabular">total: {formatCurrency(item.price * item.quantity)}</span>
+                                {onOpenDetails && item.mercadonaId && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenDetails(item)}
+                                        className="h-11 px-3 inline-flex items-center gap-1 rounded-pill text-base font-semibold text-accent-strong hover:bg-surface-sunk"
+                                    >
+                                        <Info size={18} aria-hidden="true" />
+                                        Ficha<span className="sr-only"> de {item.name}</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </li>

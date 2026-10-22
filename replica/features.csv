@@ -21,11 +21,11 @@ Precios del almacén de Sevilla,catálogo Mercadona,must,yes,partial,svq1 por de
 Mostrar foto y precio real en la cesta,cesta,must,yes,yes,
 Precio por unidad de referencia (€/kg €/L €/ud),catálogo Mercadona,should,yes,partial,depende de que la API real traiga reference_price
 Formato / envase / tamaño del producto,catálogo Mercadona,should,yes,partial,depende de packaging y unit_size reales
-Indicador de rebaja (precio anterior),catálogo Mercadona,could,yes,partial,solo si la API trae previous_unit_price
+Indicador de rebaja (precio anterior),catálogo Mercadona,could,yes,yes,pestaña Rebajas con la lista oficial y aviso de favoritos rebajados
 Buscar productos de Mercadona por nombre,catálogo Mercadona,should,yes,yes,tiempo real desde 1 letra sobre todo el catálogo; carga de pasillos en segundo plano al enfocar
-Ficha de producto con foto grande y datos,catálogo Mercadona,could,yes,no,M04
+Ficha de producto con foto grande y datos,catálogo Mercadona,could,yes,yes,botón Ficha; carga bajo demanda
 Restar una unidad (+/- por línea),cesta,should,yes,yes,− deshabilitado en 1; X sigue quitando la línea
-Alérgenos e ingredientes,catálogo Mercadona,could,yes,no,M04; requiere petición de detalle por producto
+Alérgenos e ingredientes,catálogo Mercadona,could,yes,yes,"en la ficha, con aviso de comprobar el envase"
 Mantener compatibles las claves order e itemArrayNew,datos,must,no,yes,probado con datos en el formato antiguo
 App funciona entera aunque Mercadona falle,datos,must,no,yes,probado con 502 y 429
 Caché perezosa por categoría con caducidad,datos,should,no,yes,24 h; purga la más antigua si no cabe; la lista nunca se purga
@@ -42,3 +42,7 @@ Marca y logo de Mercadona,marca,could,yes,skip,no se usa como identidad de la ap
 Reseñas de productos,catálogo Mercadona,could,yes,skip,Mercadona no tiene
 Favoritos de Mercadona guardados en localStorage,favoritos,must,no,yes,corazón en cada producto; sección Tus favoritos con categorías; se actualizan con datos nuevos
 Diagnóstico de errores con origen (Vercel o Mercadona),datos,should,no,yes,ruta /api/mercadona?path=ping para comprobar el despliegue
+Parecidos más baratos,ficha,should,no,yes,hasta 3 alternativas con el ahorro
+Historial de precios de favoritos,favoritos,should,no,yes,"local, con nota de subida/bajada"
+Enviar la lista por WhatsApp,cesta,should,no,yes,wa.me con productos y total
+PDF modo tienda con casillas,pdf,should,no,yes,casillas y letra de 14 pt
