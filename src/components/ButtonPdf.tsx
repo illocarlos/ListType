@@ -1,8 +1,38 @@
 import { useState } from 'react';
-import { FileDown } from 'lucide-react';
+import { FileDown, Share } from 'lucide-react';
 import type { orderItem } from "../types/types"
 import { formatCurrency } from '../helpers/formatPrice';
 import { imageToDataUrl } from '../helpers/mercadona';
+import { isIOS } from '../helpers/install';
+
+const FILE_NAME = 'pedido.pdf';
+
+// En iPhone y iPad las descargas fallan en la app instalada en la pantalla de inicio
+// (WebKit 275288 y 290847: no hacen nada o abren una vista sin botón para volver).
+// Allí el PDF se entrega con el menú de compartir del sistema: Guardar en Archivos, Imprimir, WhatsApp…
+function canShareFile(file: File): boolean {
+    try {
+        return isIOS() && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] }) === true;
+    } catch {
+        return false;
+    }
+}
+
+type ShareResult = 'shared' | 'cancelled' | 'needs-tap';
+
+async function shareFile(file: File): Promise<ShareResult> {
+    try {
+        await navigator.share({ files: [file] });
+        return 'shared';
+    } catch (error) {
+        const name = (error as { name?: string })?.name;
+        // La persona cerró el menú: no es un error
+        if (name === 'AbortError') return 'cancelled';
+        // Safari solo deja compartir justo después de un toque; si preparar el PDF tardó, pide otro toque
+        if (name === 'NotAllowedError') return 'needs-tap';
+        throw error;
+    }
+}
 
 type ButtonPdfProps = {
     order: orderItem[]
@@ -20,6 +50,19 @@ const DETAIL_SIZE = 11;
 
 const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
     const [generating, setGenerating] = useState(false);
+    // PDF ya preparado que espera un segundo toque para abrir el menú de compartir (solo iPhone/iPad)
+    const [readyFile, setReadyFile] = useState<File | null>(null);
+
+    const shareReady = async () => {
+        if (!readyFile) return;
+        try {
+            const result = await shareFile(readyFile);
+            if (result !== 'needs-tap') setReadyFile(null);
+        } catch {
+            setReadyFile(null);
+            alert('No se ha podido abrir el PDF. Inténtalo otra vez.');
+        }
+    };
 
     const handleDownloadPdf = async () => {
         if (!order || order.length === 0) {
@@ -27,6 +70,7 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
             return;
         }
 
+        setReadyFile(null);
         setGenerating(true);
         try {
             // jsPDF se carga solo al pulsar el botón: la app abre más rápido
@@ -112,7 +156,12 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
             doc.setFontSize(NAME_SIZE);
             doc.text(`Total aprox: ${formatCurrency(total)}`, pageWidth - MARGIN, yPosition + 5, { align: 'right' });
 
-            doc.save('pedido.pdf');
+            const file = new File([doc.output('blob')], FILE_NAME, { type: 'application/pdf' });
+            if (canShareFile(file)) {
+                if (await shareFile(file) === 'needs-tap') setReadyFile(file);
+            } else {
+                doc.save(FILE_NAME);
+            }
         } catch {
             alert('No se ha podido generar el PDF. Inténtalo otra vez.');
         } finally {
@@ -121,15 +170,34 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
     };
 
     return (
-        <button
-            type='button'
-            className='w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent text-on-accent font-semibold hover:bg-accent-strong disabled:opacity-50 disabled:hover:bg-accent'
-            onClick={handleDownloadPdf}
-            disabled={!order || order.length === 0 || generating}
-        >
-            <FileDown size={20} aria-hidden='true' />
-            {generating ? 'Generando PDF…' : 'Descargar lista PDF'}
-        </button>
+        <>
+            <button
+                type='button'
+                className='w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent text-on-accent font-semibold hover:bg-accent-strong disabled:opacity-50 disabled:hover:bg-accent'
+                onClick={handleDownloadPdf}
+                disabled={!order || order.length === 0 || generating}
+            >
+                <FileDown size={20} aria-hidden='true' />
+                {generating ? 'Generando PDF…' : 'Descargar lista PDF'}
+            </button>
+
+            {/* Aviso que se anuncia al aparecer: el PDF está listo y hace falta un toque más */}
+            <div role='status' aria-live='polite'>
+                {readyFile && (
+                    <div className='rounded-md bg-highlight p-3 text-on-highlight'>
+                        <p className='text-base font-semibold'>El PDF está listo.</p>
+                        <button
+                            type='button'
+                            onClick={shareReady}
+                            className='mt-2 w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent-strong text-on-accent font-semibold'
+                        >
+                            <Share size={20} aria-hidden='true' />
+                            Guardar o enviar el PDF
+                        </button>
+                    </div>
+                )}
+            </div>
+        </>
     );
 };
 
