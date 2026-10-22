@@ -1,6 +1,6 @@
 {
   "name": "Lista de la compra",
-  "short_name": "La compra",
+  "short_name": "MercaLista",
   "description": "Lista de la compra con los productos de Mercadona, favoritos y PDF.",
   "lang": "es",
   "start_url": "/",

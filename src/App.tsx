@@ -27,6 +27,8 @@ import ShareButton from "./components/ShareButton.tsx"
 import AppUpdate from "./components/AppUpdate.tsx"
 import Collapsible from "./components/Collapsible.tsx"
 import BackToTop from "./components/BackToTop.tsx"
+import { MoveBanner, MoveImport, MoveResult } from "./components/Move.tsx"
+import { isNewHost, isOldHost } from "./helpers/move"
 
 type Source = "todo" | "favoritos" | "mercadona"
 type HomeTab = "favoritos" | "novedades" | "rebajas" | "pasillos"
@@ -540,6 +542,9 @@ function App() {
       <div className="mx-auto max-w-content px-4 md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-8">
         <main className="pt-4 pb-32 md:pb-12">
           <AppUpdate />
+          <MoveResult />
+          {/* Dirección vieja: aviso de mudanza a mercalista.vercel.app con los datos */}
+          {isOldHost() && <MoveBanner order={order} favorites={favorites} />}
           {!listOpen && !detailItem && <p role="status" aria-live="polite" className="sr-only">{announcement}</p>}
           {/* Aviso de precios antiguos: solo si tienen más de 48 h y no se han podido renovar */}
           <div role="status" aria-live="polite">
@@ -632,8 +637,11 @@ function App() {
             </div>
           ) : (
             <div>
+              {/* Dirección nueva y sin datos: traer la lista y los favoritos de la app vieja */}
+              {isNewHost() && order.length === 0 && favorites.length === 0 && <MoveImport />}
               <ZoneCard zone={mercadona.zone} onChange={mercadona.changePostalCode} />
-              <InstallHint />
+              {/* En la dirección vieja no se invita a instalar: la app está en la nueva */}
+              {!isOldHost() && <InstallHint />}
 
               {/* Pestañas de la portada (escritorio; en el móvil están en la barra de abajo) */}
               {isDesktop && (
