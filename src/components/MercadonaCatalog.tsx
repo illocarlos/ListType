@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, RefreshCw } from "lucide-react";
 import { fetchAisle, MercadonaError, mercadonaDetail, toListItem } from "../helpers/mercadona";
 import type { LoadState } from "../hooks/useMercadona";
@@ -32,20 +32,45 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
     const [productsState, setProductsState] = useState<LoadState>("idle");
     const [productsError, setProductsError] = useState<string>("");
 
+    // Pasillo pedido el último: si llega tarde la respuesta de uno anterior (se abrió A, se volvió y se abrió B),
+    // se descarta para no enseñar los productos de A bajo el título de B
+    const requested = useRef<number | null>(null);
+    const aisleTitleRef = useRef<HTMLHeadingElement>(null);
+    const exploreTitleRef = useRef<HTMLHeadingElement>(null);
+    const focusTitle = useRef<"aisle" | "explore" | null>(null);
+
     const openAisle = async (selected: MercadonaAisle, force = false) => {
+        requested.current = selected.id;
+        if (!force) focusTitle.current = "aisle";
         setAisle(selected);
         setProducts([]);
         setProductsState("loading");
         try {
             const loaded = await fetchAisle(wh, selected.id, selected.name, force);
+            if (requested.current !== selected.id) return;
             setProducts(loaded);
             onProductsLoaded?.(loaded);
             setProductsState("ready");
         } catch (error) {
+            if (requested.current !== selected.id) return;
             setProductsError(errorMessage(error));
             setProductsState("error");
         }
     };
+
+    const closeAisle = () => {
+        requested.current = null;
+        focusTitle.current = "explore";
+        setAisle(null);
+        setProducts([]);
+    };
+
+    // Al abrir un pasillo el foco va a su título; al volver, al de "Pasillos de Mercadona"
+    useEffect(() => {
+        const target = focusTitle.current === "aisle" ? aisleTitleRef.current : focusTitle.current === "explore" ? exploreTitleRef.current : null;
+        focusTitle.current = null;
+        target?.focus({ preventScroll: false });
+    }, [aisle]);
 
     const sections = useMemo(() => {
         const map = new Map<string, MercadonaProduct[]>();
@@ -59,18 +84,18 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
 
     return (
         <section aria-labelledby="explore-title">
-            <h2 id="explore-title" className="text-lg font-bold mb-3">Pasillos de Mercadona</h2>
+            <h2 id="explore-title" ref={exploreTitleRef} tabIndex={-1} className="text-lg font-bold mb-3 focus:outline-none focus-visible:outline-highlight">Pasillos de Mercadona</h2>
 
             {aisle ? (
                 <div>
                     <button
                         type="button"
-                        onClick={() => { setAisle(null); setProducts([]); }}
+                        onClick={closeAisle}
                         className="mb-3 inline-flex items-center gap-1 h-11 pr-3 text-sm font-semibold text-accent"
                     >
                         <ChevronLeft size={18} aria-hidden="true" /> Todos los pasillos
                     </button>
-                    <h3 className="text-xl font-bold mb-3">{aisle.name}</h3>
+                    <h3 ref={aisleTitleRef} tabIndex={-1} className="text-xl font-bold mb-3 focus:outline-none focus-visible:outline-highlight">{aisle.name}</h3>
 
                     {productsState === "loading" && (
                         <ul className="space-y-2" aria-busy="true">

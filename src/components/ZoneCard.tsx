@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { LocateFixed, MapPin } from "lucide-react";
 import { LocationError, postalCodeFromLocation } from "../helpers/mercadona";
 import type { Zone } from "../helpers/mercadona";
@@ -23,6 +23,15 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
 
     const open = !zone || editing;
 
+    // Al confirmar el código postal el formulario desaparece: el foco pasa a "Cambiar" (no se pierde)
+    const changeRef = useRef<HTMLButtonElement>(null);
+    const focusChange = useRef<boolean>(false);
+    useEffect(() => {
+        if (open || !focusChange.current) return;
+        focusChange.current = false;
+        changeRef.current?.focus({ preventScroll: true });
+    }, [open]);
+
     // Comprueba el código postal con Mercadona y, si va bien, cierra el recuadro
     const applyPostalCode = async (postalCode: string, fromLocation: boolean) => {
         setBusy("postal");
@@ -32,6 +41,7 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
             setError(message);
             return;
         }
+        focusChange.current = true;
         setEditing(false);
         setDone(fromLocation
             ? `Listo: por tu ubicación, tu código postal es ${postalCode}. Ya ves los precios de tu zona.`
@@ -73,6 +83,7 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
                         <span>Precios de tu zona: <strong className="tabular">{zone.postalCode}</strong></span>
                     </p>
                     <button
+                        ref={changeRef}
                         type="button"
                         onClick={() => { setValue(zone.postalCode); setEditing(true); setDone(""); }}
                         className="flex-none h-11 px-3 text-sm font-semibold text-accent underline underline-offset-2"
@@ -101,7 +112,7 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
                         {busy === "location" ? "Buscando dónde estás…" : "Usar mi ubicación"}
                     </button>
                     <p className="mt-2 text-sm text-muted">
-                        El móvil te pedirá permiso. Solo se usa para saber tu código postal y no se guarda.
+                        El móvil te pedirá permiso. Solo se usa para saber tu código postal; la app no la guarda.
                     </p>
 
                     <form onSubmit={submit} className="mt-4 flex flex-col gap-3 border-t border-border pt-4" noValidate>

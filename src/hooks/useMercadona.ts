@@ -31,6 +31,9 @@ const errorMessage = (error: unknown) =>
 // Estado del catálogo de Mercadona: pasillos, carga completa para el buscador y almacén
 export default function useMercadona() {
     const [wh, setWh] = useState<string>(() => getWarehouse());
+    // Zona actual, para descartar respuestas que lleguen tarde de una zona anterior
+    const whRef = useRef<string>(wh);
+    whRef.current = wh;
 
     const [groups, setGroups] = useState<MercadonaGroup[]>([]);
     const [groupsState, setGroupsState] = useState<LoadState>("idle");
@@ -51,9 +54,12 @@ export default function useMercadona() {
         const load = async (kind: HomeList, setter: (products: MercadonaProduct[]) => void) => {
             setHomeState(previous => previous[kind] === "ready" ? previous : { ...previous, [kind]: "loading" });
             try {
-                setter(await fetchHomeList(zoneWh, kind, force));
+                const products = await fetchHomeList(zoneWh, kind, force);
+                if (whRef.current !== zoneWh) return;
+                setter(products);
                 setHomeState(previous => ({ ...previous, [kind]: "ready" }));
             } catch {
+                if (whRef.current !== zoneWh) return;
                 setHomeState(previous => previous[kind] === "ready" ? previous : { ...previous, [kind]: "error" });
             }
         };
@@ -97,7 +103,7 @@ export default function useMercadona() {
         runRef.current++;
     }, []);
 
-    const startIndex = useCallback(() => {
+    const startIndex = useCallback((ignorePause = false) => {
         const run = ++runRef.current;
         setIndexState("running");
         indexAllAisles(
@@ -111,7 +117,8 @@ export default function useMercadona() {
             progress => {
                 if (runRef.current === run) setIndexProgress(progress);
             },
-            () => runRef.current !== run
+            () => runRef.current !== run,
+            ignorePause
         ).then(result => {
             if (runRef.current !== run) return;
             setIndexState(result.done === result.total && result.failed === 0 ? "done" : "stopped");
@@ -207,7 +214,8 @@ export default function useMercadona() {
             loadGroups(true);
             setIndexState("idle");
         } else {
-            startIndex();
+            // Pulsado a mano: se intenta aunque haya pausa (si Mercadona sigue rechazando, para al primero)
+            startIndex(true);
         }
     }, [groupsState, loadGroups, startIndex]);
 
@@ -286,8 +294,9 @@ export default function useMercadona() {
     // Se recalcula cada vez que llegan productos (pool cambia al descargar un pasillo).
     const pricesUpdatedAt = useMemo(() => {
         void pool;
-        return pricesFetchedAt(wh);
-    }, [pool, wh]);
+        const current = new Set(groups.flatMap(group => group.aisles.map(aisle => aisle.id)));
+        return pricesFetchedAt(wh, current);
+    }, [pool, wh, groups]);
     const pricesStale = refreshTried && pricesUpdatedAt !== null && Date.now() - pricesUpdatedAt > STALE_WARNING_MS;
 
     return {

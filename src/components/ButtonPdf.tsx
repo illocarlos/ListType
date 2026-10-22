@@ -43,7 +43,9 @@ type ButtonPdfProps = {
 const MARGIN = 18;
 const TOP = 20;
 const CHECKBOX = 7;
-const IMAGE_SIZE = 14;
+// Foto de cada producto: 28 mm (el doble que antes, a petición del dueño). Se pide a 240 px para que se vea nítida impresa.
+const IMAGE_SIZE = 28;
+const IMAGE_PX = 240;
 const LINE_HEIGHT = 7;
 const NAME_SIZE = 14;
 const DETAIL_SIZE = 11;
@@ -82,7 +84,7 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
 
             // Miniaturas de los productos de Mercadona; si alguna falla, esa línea sale sin foto
             const images = await Promise.all(
-                order.map(item => item.image ? imageToDataUrl(item.image) : Promise.resolve(null))
+                order.map(item => item.image ? imageToDataUrl(item.image, IMAGE_PX) : Promise.resolve(null))
             );
 
             // Título

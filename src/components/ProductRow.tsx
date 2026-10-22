@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Heart, Info, Minus, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
 import type { listItem } from "../types/types";
@@ -25,8 +26,20 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
     const inList = quantity > 0;
     const canOpen = Boolean(onOpenDetails && item.mercadonaId);
 
+    // Al añadir, el botón + redondo se cambia por − n +; al quitar la última unidad, al revés.
+    // El foco pasa al botón equivalente para que el teclado y el lector de pantalla no pierdan el sitio.
+    const addRef = useRef<HTMLButtonElement>(null);
+    const plusRef = useRef<HTMLButtonElement>(null);
+    const focusNext = useRef<"add" | "plus" | null>(null);
+    useEffect(() => {
+        const target = focusNext.current === "plus" ? plusRef.current : focusNext.current === "add" ? addRef.current : null;
+        focusNext.current = null;
+        target?.focus({ preventScroll: true });
+    }, [inList]);
+
     return (
         <li
+            data-row-id={item.id}
             className={`flex gap-3 px-3 py-2 rounded-md transition-colors duration-200 ${inList ? "bg-accent-soft" : "bg-surface"}`}
         >
             <div className="pt-1">
@@ -45,7 +58,7 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                             <button
                                 type="button"
                                 onClick={() => onOpenDetails?.(item)}
-                                className="inline text-left font-semibold leading-snug break-words hover:underline underline-offset-2 rounded-sm"
+                                className="relative inline text-left font-semibold leading-snug break-words hover:underline underline-offset-2 rounded-sm before:absolute before:inset-x-0 before:-top-3 before:-bottom-0.5 before:content-['']"
                             >
                                 <span className="sr-only">Ficha de </span>
                                 {item.name}
@@ -103,7 +116,11 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                         <div className="flex items-center rounded-pill bg-surface border border-border">
                             <button
                                 type="button"
-                                onClick={() => onDecrease(item)}
+                                onClick={event => {
+                                    // Solo si el botón tenía el foco (teclado, lector de pantalla); con el dedo no hace falta
+                                    if (quantity === 1 && document.activeElement === event.currentTarget) focusNext.current = "add";
+                                    onDecrease(item);
+                                }}
                                 aria-label={quantity === 1 ? `Quitar ${item.name} de la lista` : `Quitar ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
                                 className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
                             >
@@ -115,6 +132,7 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                                 <span className="sr-only">{item.byWeight ? " aproximados" : ""} en la lista</span>
                             </span>
                             <button
+                                ref={plusRef}
                                 type="button"
                                 onClick={() => onAdd(item)}
                                 aria-label={`Añadir ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
@@ -125,8 +143,12 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                         </div>
                     ) : (
                         <button
+                            ref={addRef}
                             type="button"
-                            onClick={() => onAdd(item)}
+                            onClick={event => {
+                                if (document.activeElement === event.currentTarget) focusNext.current = "plus";
+                                onAdd(item);
+                            }}
                             aria-label={`Añadir ${item.name} a la lista`}
                             className="h-11 w-11 grid place-items-center rounded-full bg-accent text-on-accent hover:bg-accent-strong"
                         >

@@ -75,7 +75,17 @@ function App() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [detailItem, setDetailItem] = useState<listItem | null>(null);
-  const { historyOf, changeNote } = usePriceHistory(favorites);
+  // Historial: solo se apuntan precios confirmados en la zona actual (el favorito tiene el mismo precio que
+  // el catálogo de esta zona). Justo después de cambiar de código postal, el favorito aún lleva el precio de
+  // la zona anterior y no debe contar como punto de la nueva.
+  const confirmedFavorites = useMemo(
+    () => favorites.filter(item => {
+      const current = item.mercadonaId ? mercadona.searchableById.get(item.mercadonaId) : undefined;
+      return current !== undefined && Math.abs(current.price - item.price) < 0.005;
+    }),
+    [favorites, mercadona.searchableById]
+  );
+  const { historyOf, changeNote } = usePriceHistory(confirmedFavorites, mercadona.wh);
 
   // Novedades y rebajas se agrupan por sección grande de Mercadona ("Bodega", "Congelados"…):
   // las listas oficiales solo traen esa sección, y los productos de pasillos ya abiertos se llevan a la suya
@@ -211,10 +221,61 @@ function App() {
     setSelectedCheckbox(previous => previous === value ? null : value);
   };
 
+  // Aviso para lector de pantalla tras añadir o quitar (si no, al cambiar el botón no se oye nada).
+  // Si el texto se repite igual se le cambia un espacio para que se vuelva a leer.
+  const [announcement, setAnnouncement] = useState<string>("");
+  const announce = useCallback((text: string) => {
+    setAnnouncement(previous => previous === text ? `${text}\u00a0` : text);
+  }, []);
+  const amount = (item: listItem, quantity: number) =>
+    item.byWeight ? `${quantity} kg` : `${quantity} ${quantity === 1 ? "unidad" : "unidades"}`;
+
+  const addAnnounced = (item: listItem) => {
+    const quantity = quantityOf(item.id) + 1;
+    addItem(item);
+    announce(`Añadido: ${item.name}. ${amount(item, quantity)} en la lista.`);
+  };
+
   // En los resultados, "−" con 1 unidad quita el producto de la lista
   const decreaseFromResults = (item: listItem) => {
-    if (quantityOf(item.id) > 1) decreaseItem(item.id);
-    else removeItem(item.id);
+    const quantity = quantityOf(item.id);
+    if (quantity > 1) {
+      decreaseItem(item.id);
+      announce(`Quitado: ${item.name}. Quedan ${amount(item, quantity - 1)}.`);
+    } else {
+      removeItem(item.id);
+      announce(`${item.name}: quitado de la lista.`);
+    }
+  };
+
+  const decreaseInList = (id: number) => {
+    const item = order.find(entry => entry.id === id);
+    decreaseItem(id);
+    if (item && item.quantity > 1) announce(`Quitado: ${item.name}. Quedan ${amount(item, item.quantity - 1)}.`);
+  };
+
+  const removeAnnounced = (id: number) => {
+    const item = order.find(entry => entry.id === id);
+    removeItem(id);
+    if (item) announce(`${item.name}: quitado de la lista.`);
+  };
+
+  // Quitar un favorito hace desaparecer su fila en la pestaña Favoritos: si el corazón tenía el foco,
+  // pasa al corazón del favorito siguiente (o al título), para no perder el sitio
+  const toggleFavoriteKeepFocus = (item: listItem) => {
+    const row = document.querySelector(`[data-row-id="${item.id}"]`);
+    const hadFocus = Boolean(row && document.activeElement && row.contains(document.activeElement));
+    const neighbour = (row?.nextElementSibling ?? row?.previousElementSibling)?.getAttribute("data-row-id");
+    const removing = isFavorite(item.id);
+    toggleFavorite(item);
+    if (!removing) return;
+    announce(`${item.name}: quitado de favoritos.`);
+    if (!hadFocus) return;
+    window.requestAnimationFrame(() => {
+      if (row?.isConnected) return;
+      const next = neighbour ? document.querySelector<HTMLButtonElement>(`[data-row-id="${neighbour}"] button[aria-pressed]`) : null;
+      (next ?? document.getElementById("favorites-title"))?.focus();
+    });
   };
 
   const closeList = useCallback(() => setListOpen(false), []);
@@ -301,10 +362,10 @@ function App() {
       detail={itemDetail(item)}
       previousPrice={item.mercadonaId ? mercadona.searchableById.get(item.mercadonaId)?.previousPrice : null}
       quantity={quantityOf(item.id)}
-      onAdd={addItem}
+      onAdd={addAnnounced}
       onDecrease={decreaseFromResults}
       favorite
-      onToggleFavorite={toggleFavorite}
+      onToggleFavorite={toggleFavoriteKeepFocus}
       note={changeNote(item)}
       onOpenDetails={openDetail}
     />
@@ -320,7 +381,7 @@ function App() {
         detail={mercadonaDetail(product)}
         previousPrice={product.previousPrice}
         quantity={quantityOf(item.id)}
-        onAdd={addItem}
+        onAdd={addAnnounced}
         onDecrease={decreaseFromResults}
         favorite={isFavorite(item.id)}
         onToggleFavorite={toggleFavorite}
@@ -395,9 +456,9 @@ function App() {
       <div className="flex-1 overflow-y-auto">
         <ListOrder
           order={order}
-          addItem={addItem}
-          decreaseItem={decreaseItem}
-          removeItem={removeItem}
+          addItem={addAnnounced}
+          decreaseItem={decreaseInList}
+          removeItem={removeAnnounced}
           onOpenDetails={openDetail}
         />
       </div>
@@ -454,13 +515,14 @@ function App() {
       <div className="mx-auto max-w-content px-4 md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-8">
         <main className="pt-4 pb-32 md:pb-12">
           <AppUpdate />
+          {!listOpen && !detailItem && <p role="status" aria-live="polite" className="sr-only">{announcement}</p>}
           {/* Aviso de precios antiguos: solo si tienen más de 48 h y no se han podido renovar */}
           <div role="status" aria-live="polite">
             {mercadona.pricesStale && mercadona.pricesUpdatedAt !== null && (
               <p className="mb-4 flex items-start gap-2 rounded-md bg-highlight p-3 text-base text-on-highlight">
                 <AlertTriangle size={20} aria-hidden="true" className="mt-0.5 flex-none" />
                 <span>
-                  Precios sin actualizar desde el {new Date(mercadona.pricesUpdatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}.
+                  Hay precios sin actualizar desde el {new Date(mercadona.pricesUpdatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}.
                   {" "}Puede que alguno haya cambiado; la app lo volverá a intentar sola.
                 </span>
               </p>
@@ -652,7 +714,7 @@ function App() {
               {homeTab === "favoritos" && (
               <section id="panel-favoritos" role="tabpanel" aria-labelledby="tab-favoritos">
                 <div className="flex items-baseline justify-between gap-3 mb-3">
-                  <h2 id="favorites-title" className="text-lg font-bold">Tus favoritos</h2>
+                  <h2 id="favorites-title" tabIndex={-1} className="text-lg font-bold focus:outline-none focus-visible:outline-highlight">Tus favoritos</h2>
                   {favorites.length > 0 && (
                     <span className="text-sm text-muted tabular">{favorites.length}</span>
                   )}
@@ -714,7 +776,7 @@ function App() {
                 groupsError={mercadona.groupsError}
                 onRetryGroups={mercadona.retry}
                 quantityOf={quantityOf}
-                onAdd={addItem}
+                onAdd={addAnnounced}
                 onDecrease={decreaseFromResults}
                 isFavorite={isFavorite}
                 onToggleFavorite={toggleFavorite}
@@ -757,6 +819,7 @@ function App() {
 
       <Sheet open={listOpen} title={`Tu lista (${lineCount})`} onClose={closeList} variant="full">
         {listPanel(false)}
+        {!detailItem && <p role="status" aria-live="polite" className="sr-only">{announcement}</p>}
       </Sheet>
 
       {/* Ficha del producto: ingredientes, alérgenos, historial y parecidos más baratos */}
@@ -767,7 +830,7 @@ function App() {
             wh={mercadona.wh}
             item={detailItem}
             quantityOf={quantityOf}
-            onAdd={addItem}
+            onAdd={addAnnounced}
             onDecrease={decreaseFromResults}
             isFavorite={isFavorite}
             onToggleFavorite={toggleFavorite}
@@ -778,6 +841,7 @@ function App() {
             navigated={detailNavigated}
           />
         )}
+        {detailItem && <p role="status" aria-live="polite" className="sr-only">{announcement}</p>}
       </Sheet>
     </div>
   )

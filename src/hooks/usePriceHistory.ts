@@ -21,7 +21,10 @@ function readHistory(): History {
 
 // Historial de precios de los favoritos, guardado solo en el móvil.
 // Se apunta un punto cada vez que el precio de un favorito cambia (la app ya los actualiza sola).
-export default function usePriceHistory(favorites: listItem[]) {
+// Va por zona (almacén): al cambiar de código postal los precios son otros, y eso no es "ha subido".
+const entryKey = (wh: string, mercadonaId: string) => `${wh}|${mercadonaId}`;
+
+export default function usePriceHistory(favorites: listItem[], wh: string) {
     const [history, setHistory] = useState<History>(readHistory);
 
     useEffect(() => {
@@ -30,10 +33,11 @@ export default function usePriceHistory(favorites: listItem[]) {
             const next: History = { ...previous };
             for (const favorite of favorites) {
                 if (!favorite.mercadonaId || !(favorite.price > 0)) continue;
-                const points = next[favorite.mercadonaId] ?? [];
+                const key = entryKey(wh, favorite.mercadonaId);
+                const points = next[key] ?? [];
                 const last = points[points.length - 1];
                 if (last && Math.abs(last.p - favorite.price) < 0.005) continue;
-                next[favorite.mercadonaId] = [...points, { d: today(), p: favorite.price }].slice(-MAX_POINTS);
+                next[key] = [...points, { d: today(), p: favorite.price }].slice(-MAX_POINTS);
                 changed = true;
             }
             if (!changed) return previous;
@@ -41,13 +45,13 @@ export default function usePriceHistory(favorites: listItem[]) {
             saveImportant(HISTORY_KEY, JSON.stringify(next));
             return next;
         });
-    }, [favorites]);
+    }, [favorites, wh]);
 
-    const historyOf = useCallback((mercadonaId?: string): PricePoint[] => (mercadonaId ? history[mercadonaId] ?? [] : []), [history]);
+    const historyOf = useCallback((mercadonaId?: string): PricePoint[] => (mercadonaId ? history[entryKey(wh, mercadonaId)] ?? [] : []), [history, wh]);
 
     // "Ha subido un 12 % desde que lo guardaste" (o bajado), o vacío si no ha cambiado
     const changeNote = useCallback((item: listItem): { text: string, direction: "up" | "down" } | null => {
-        const points = item.mercadonaId ? history[item.mercadonaId] : undefined;
+        const points = item.mercadonaId ? history[entryKey(wh, item.mercadonaId)] : undefined;
         if (!points || points.length < 2 || !(item.price > 0)) return null;
         const first = points[0].p;
         const change = Math.round(((item.price - first) / first) * 100);
@@ -55,7 +59,7 @@ export default function usePriceHistory(favorites: listItem[]) {
         return change > 0
             ? { text: `Ha subido un ${change} % desde que lo guardaste`, direction: "up" }
             : { text: `Ha bajado un ${Math.abs(change)} % desde que lo guardaste`, direction: "down" };
-    }, [history]);
+    }, [history, wh]);
 
     return { historyOf, changeNote };
 }
