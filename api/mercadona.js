@@ -165,7 +165,10 @@ export default async function handler(req, res) {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('x-listtype-proxy', '1');
         if (fallback) res.setHeader('x-wh-fallback', '1');
-        res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
+        // Productos y precios: el CDN de Vercel guarda la copia 6 h y solo puede entregar una copia
+        // caducada durante 1 h más mientras busca la nueva. Con la caché de 24 h del móvil, el retraso
+        // máximo de un precio queda en algo más de un día (antes podía llegar a unos 3 días).
+        res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=3600');
         return res.status(200).send(body);
     } catch (error) {
         return sendError(res, 502, 'upstream_unreachable', { detail: String(error?.name || error) });
