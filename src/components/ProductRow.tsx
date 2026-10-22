@@ -66,11 +66,17 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="tabular">
                         {item.price > 0 && <span className="text-base font-bold">{formatCurrency(item.price)}</span>}
-                        {previousPrice ? (
-                            <span className="ml-2 text-sm text-muted">
-                                <span className="sr-only">antes </span>
-                                <span className="line-through">{formatCurrency(previousPrice)}</span>
-                            </span>
+                        {previousPrice && previousPrice > item.price && item.price > 0 ? (
+                            <>
+                                <span className="ml-2 text-sm text-muted">
+                                    <span className="sr-only">antes </span>
+                                    <span className="line-through">{formatCurrency(previousPrice)}</span>
+                                </span>
+                                <span className="ml-2 rounded-pill bg-highlight px-2 text-sm font-bold text-on-highlight">
+                                    −{Math.round(((previousPrice - item.price) / previousPrice) * 100)} %
+                                    <span className="sr-only"> de descuento</span>
+                                </span>
+                            </>
                         ) : null}
                     </p>
 

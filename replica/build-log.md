@@ -119,3 +119,9 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - **Enviar por WhatsApp** (`wa.me`) con la lista y el total.
 - Abrir un pasillo también actualiza precios de favoritos y lista. Diálogos apilables: Escape cierra solo el de arriba.
 - Pruebas: 27/27 nuevas + 125 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · Rebajas comprobables
+
+- El usuario veía demasiadas rebajas. Causa probable: el lector tolerante recoge cualquier producto de la respuesta (puede traer otras secciones) y no se exigía precio anterior.
+- Ahora Rebajas solo muestra productos con `previousPrice > price`, con el descuento visible ("−9 %"), ordenados por descuento dentro de cada pasillo. El contador y el aviso de favoritos usan el mismo criterio.
+- Pruebas: 30/30 (incluye productos sin precio anterior y con precio anterior menor, que quedan fuera) + 125 de regresión; auditoría sin problemas.
