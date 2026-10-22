@@ -44,12 +44,13 @@ function makeMatcher(term: string) {
   return { matches, score };
 }
 
-function groupByAisle(products: SearchableProduct[]) {
+function groupByAisle(products: SearchableProduct[], sectionOf: (product: SearchableProduct) => string = product => product.aisle) {
   const groups = new Map<string, SearchableProduct[]>();
   for (const product of products) {
-    const list = groups.get(product.aisle) ?? [];
+    const section = sectionOf(product);
+    const list = groups.get(section) ?? [];
     list.push(product);
-    groups.set(product.aisle, list);
+    groups.set(section, list);
   }
   return [...groups.entries()];
 }
@@ -74,22 +75,34 @@ function App() {
   const [detailItem, setDetailItem] = useState<listItem | null>(null);
   const { historyOf, changeNote } = usePriceHistory(favorites);
 
+  // Novedades y rebajas se agrupan por sección grande de Mercadona ("Bodega", "Congelados"…):
+  // las listas oficiales solo traen esa sección, y los productos de pasillos ya abiertos se llevan a la suya
+  // para que lo mismo no salga bajo dos títulos distintos.
+  const sectionOfAisle = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of mercadona.groups) {
+      for (const aisle of group.aisles) map.set(aisle.name, group.name);
+    }
+    return map;
+  }, [mercadona.groups]);
+  const sectionOf = useCallback((product: SearchableProduct) => sectionOfAisle.get(product.aisle) ?? product.aisle, [sectionOfAisle]);
+
   // Novedades: la lista oficial de Mercadona + lo que marca como nuevo (sin cargar todo el catálogo)
   const novelties = useMemo(
     () => [...mercadona.novelties]
-      .sort((a, b) => a.aisle.localeCompare(b.aisle, "es") || a.searchName.localeCompare(b.searchName, "es", { numeric: true })),
-    [mercadona.novelties]
+      .sort((a, b) => sectionOf(a).localeCompare(sectionOf(b), "es") || a.searchName.localeCompare(b.searchName, "es", { numeric: true })),
+    [mercadona.novelties, sectionOf]
   );
-  const noveltiesByAisle = useMemo(() => groupByAisle(novelties), [novelties]);
+  const noveltiesByAisle = useMemo(() => groupByAisle(novelties, sectionOf), [novelties, sectionOf]);
 
   // Rebajas: la lista oficial de bajadas de precio de Mercadona
-  // Primero los pasillos; dentro de cada uno, de mayor a menor descuento
+  // Primero las secciones; dentro de cada una, de mayor a menor descuento
   const discount = (product: SearchableProduct) => product.previousPrice ? (product.previousPrice - product.price) / product.previousPrice : 0;
   const drops = useMemo(
-    () => [...mercadona.drops].sort((a, b) => a.aisle.localeCompare(b.aisle, "es") || discount(b) - discount(a)),
-    [mercadona.drops]
+    () => [...mercadona.drops].sort((a, b) => sectionOf(a).localeCompare(sectionOf(b), "es") || discount(b) - discount(a)),
+    [mercadona.drops, sectionOf]
   );
-  const dropsByAisle = useMemo(() => groupByAisle(drops), [drops]);
+  const dropsByAisle = useMemo(() => groupByAisle(drops, sectionOf), [drops, sectionOf]);
 
 
   // Categorías de los favoritos (el pasillo de Mercadona de cada uno)

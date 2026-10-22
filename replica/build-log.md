@@ -145,3 +145,13 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - Al volver tras 2 min o más fuera, si hay versión nueva y aún no se ha tocado nada ni hay una ventana abierta, **se recarga sola**. Si no, aviso "Hay una versión nueva de la app" con botón "Actualizar ahora" (zona `role=status`).
 - **Tirar hacia abajo para actualizar** solo en la app instalada (en el navegador ya existe el gesto propio): desde arriba del todo, sin ventana abierta, vertical; indicador "Desliza / Suelta para actualizar / Actualizando…". Recargar no fuerza a bajar otra vez el catálogo (sigue la caché de 24 h y la del CDN de 12 h); la lista y los favoritos no se pierden.
 - Pruebas: 19/19 nuevas + 174 de regresión (incluye datos reales); auditoría sin problemas.
+
+## 2026-10-22 · Rebajas con la respuesta real de Mercadona
+
+- El usuario envió la respuesta real de `home/price-drops/` (Sevilla, svq1, 22-10-2026, impresa desde Safari con el margen derecho cortado).
+- Forma real: `{layout, title: "Bajadas de precio", source: "price-drops", source_code: "PD", items: [...], uuid}`. **142 productos, los 142 con `previous_unit_price`**: la lista es de bajadas de verdad y ese es el número real que publica Mercadona (no un fallo de la app). `price_decreased` no se pudo leer (línea cortada). Claves de `price_instructions` en orden alfabético, como en los datos de 2024.
+- Cada producto trae **una sola categoría, de nivel 0** ("Bodega", "Congelados"…), no el pasillo.
+- **Fallo corregido**: si el pasillo del producto ya estaba en el móvil (copia de hasta 24 h), su precio mandaba sobre el de la lista de rebajas; una bajada de hoy desaparecía de Rebajas. Ahora precio y precio anterior de la lista oficial mandan. Reproducido antes del arreglo (3/8) y resuelto (8/8).
+- **Títulos**: Novedades y Rebajas se agrupan por sección grande; los productos de pasillos abiertos se llevan a su sección para no salir bajo dos títulos.
+- Sin verificar: `unit_price` de cada rebaja (cortado en la impresión) y `products/<id>/similars/`.
+- Pruebas: 8/8 nuevas + 193 de regresión; auditoría sin problemas.
