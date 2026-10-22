@@ -217,11 +217,19 @@ export default function useMercadona() {
     }, [applyWarehouse]);
 
     // Lista preparada para buscar: pasillos + rebajas + novedades, con el nombre normalizado una vez.
-    // "Novedad" = lo que Mercadona publica como novedad o marca como nuevo. Las rebajas traen el precio anterior.
+    // "Novedad" = lo que Mercadona publica como novedad o marca como nuevo.
+    // Rebajas: su precio y su precio anterior mandan sobre la copia del pasillo, que puede tener hasta 24 h
+    // (la lista de rebajas se renueva cada vez que se vuelve a la app). Si no, una bajada de hoy desaparecería.
     const searchable = useMemo<SearchableProduct[]>(() => {
         const newIds = new Set(newArrivals.map(product => product.mercadonaId));
         const merged = new Map(pool);
-        for (const product of [...priceDrops, ...newArrivals]) {
+        for (const product of priceDrops) {
+            const existing = merged.get(product.mercadonaId);
+            merged.set(product.mercadonaId, existing && product.price > 0
+                ? { ...existing, price: product.price, previousPrice: product.previousPrice, unitPrice: product.unitPrice || existing.unitPrice }
+                : existing ?? product);
+        }
+        for (const product of newArrivals) {
             const existing = merged.get(product.mercadonaId);
             merged.set(product.mercadonaId, existing
                 ? { ...existing, previousPrice: existing.previousPrice ?? product.previousPrice }
