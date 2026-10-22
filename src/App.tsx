@@ -23,6 +23,8 @@ import ZoneCard from "./components/ZoneCard.tsx"
 import ProductSheet from "./components/ProductSheet.tsx"
 import ShareButton from "./components/ShareButton.tsx"
 import AppUpdate from "./components/AppUpdate.tsx"
+import Collapsible from "./components/Collapsible.tsx"
+import BackToTop from "./components/BackToTop.tsx"
 
 type Source = "todo" | "favoritos" | "mercadona"
 type HomeTab = "favoritos" | "novedades" | "rebajas" | "pasillos"
@@ -389,7 +391,7 @@ function App() {
       <header className="sticky top-0 z-30 bg-accent-strong text-on-accent safe-top">
         <div className="mx-auto max-w-content px-4">
           <div className="flex h-14 items-center justify-between">
-            <h1 className="text-xl font-extrabold tracking-tight">Lista de la compra</h1>
+            <h1 id="app-title" tabIndex={-1} className="text-xl font-extrabold tracking-tight focus:outline-none focus-visible:outline-highlight">Lista de la compra</h1>
           </div>
           <div className="pb-3 md:pr-[412px]">
             <label htmlFor="search" className="sr-only">Buscar productos de Mercadona</label>
@@ -565,14 +567,15 @@ function App() {
                       )}
                     </div>
                   ) : (
-                    noveltiesByAisle.map(([aisle, items]) => (
-                      <div key={aisle} className="mb-6">
-                        <h3 className="text-sm font-semibold text-muted mb-2">{aisle}</h3>
-                        <ul className="space-y-2">
-                          {items.map(productRow)}
-                        </ul>
-                      </div>
-                    ))
+                    <div className="space-y-2">
+                      {noveltiesByAisle.map(([aisle, items]) => (
+                        <Collapsible key={aisle} title={aisle} count={items.length} defaultOpen={noveltiesByAisle.length === 1}>
+                          <ul className="space-y-2">
+                            {items.map(productRow)}
+                          </ul>
+                        </Collapsible>
+                      ))}
+                    </div>
                   )}
                 </section>
               )}
@@ -596,14 +599,15 @@ function App() {
                       )}
                     </div>
                   ) : (
-                    dropsByAisle.map(([aisle, items]) => (
-                      <div key={aisle} className="mb-6">
-                        <h3 className="text-sm font-semibold text-muted mb-2">{aisle}</h3>
-                        <ul className="space-y-2">
-                          {items.map(productRow)}
-                        </ul>
-                      </div>
-                    ))
+                    <div className="space-y-2">
+                      {dropsByAisle.map(([aisle, items]) => (
+                        <Collapsible key={aisle} title={aisle} count={items.length} defaultOpen={dropsByAisle.length === 1}>
+                          <ul className="space-y-2">
+                            {items.map(productRow)}
+                          </ul>
+                        </Collapsible>
+                      ))}
+                    </div>
                   )}
                 </section>
               )}
@@ -711,6 +715,8 @@ function App() {
           <span className="ml-auto text-lg font-extrabold tabular">{formatCurrency(total)}</span>
         </button>
       </div>
+
+      <BackToTop focusTargetId="app-title" />
 
       <Sheet open={listOpen} title={`Tu lista (${lineCount})`} onClose={closeList} variant="full">
         {listPanel(false)}

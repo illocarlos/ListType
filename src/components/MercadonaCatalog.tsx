@@ -4,6 +4,7 @@ import { fetchAisle, MercadonaError, mercadonaDetail, toListItem } from "../help
 import type { LoadState } from "../hooks/useMercadona";
 import type { listItem, MercadonaAisle, MercadonaGroup, MercadonaProduct } from "../types/types";
 import ProductRow from "./ProductRow";
+import Collapsible from "./Collapsible";
 
 type MercadonaCatalogProps = {
     wh: string,
@@ -92,9 +93,11 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
                         <p className="text-sm text-muted">Este pasillo no tiene productos ahora mismo.</p>
                     )}
 
-                    {productsState === "ready" && sections.map(([subcategory, list]) => (
-                        <div key={subcategory} className="mb-6">
-                            <h4 className="text-sm font-semibold text-muted mb-2">{subcategory}</h4>
+                    {/* Subcategorías plegables: con una sola, abierta directamente */}
+                    {productsState === "ready" && products.length > 0 && (
+                        <div className="space-y-2">
+                    {sections.map(([subcategory, list]) => (
+                        <Collapsible key={`${aisle.id}-${subcategory}`} title={subcategory} count={list.length} defaultOpen={sections.length === 1}>
                             <ul className="space-y-2">
                                 {list.map(product => {
                                     const item = toListItem(product);
@@ -114,8 +117,10 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
                                     );
                                 })}
                             </ul>
-                        </div>
+                        </Collapsible>
                     ))}
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div>
