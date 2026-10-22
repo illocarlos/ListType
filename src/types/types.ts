@@ -9,7 +9,9 @@ export type listItem = {
     mercadonaId?: string,
     packaging?: string,
     unitPrice?: string,
-    isNew?: boolean
+    isNew?: boolean,
+    // Se vende a granel: el precio es por kilo y la cantidad son kilos aproximados
+    byWeight?: boolean
 }
 
 
@@ -40,6 +42,8 @@ export type MercadonaProduct = {
     image: string,
     subcategory: string,
     aisle: string,
-    // Novedad: marca de Mercadona o producto aparecido hace menos de 60 días (detectado por la app)
-    isNew?: boolean
+    // Novedad: lista oficial de Mercadona o marca is_new / is_new_arrival
+    isNew?: boolean,
+    // Granel (selling_method 1): el precio es el de bulk_price, por kilo
+    byWeight?: boolean
 }

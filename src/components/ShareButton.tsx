@@ -8,7 +8,8 @@ type ShareButtonProps = { order: orderItem[] };
 function listAsText(order: orderItem[]): string {
     const lines = order.map(item => {
         const price = item.price > 0 ? ` (${formatCurrency(item.price * item.quantity)})` : "";
-        return `☐ ${item.quantity} × ${item.name}${price}`;
+        const amount = item.byWeight ? `${item.quantity} kg aprox.` : `${item.quantity} ×`;
+        return `☐ ${amount} ${item.name}${price}`;
     });
     const total = order.reduce((sum, item) => sum + item.price * item.quantity, 0);
     return [

@@ -325,8 +325,14 @@ function parseProduct(rawProduct: unknown, subcategory: string, aisle: string): 
     if (!mercadonaId || !name) return null;
 
     const priceInfo = asObj(product.price_instructions);
-    const price = num(priceInfo?.unit_price) ?? num(priceInfo?.bulk_price) ?? 0;
-    const previous = num(priceInfo?.previous_unit_price);
+    // Granel (selling_method 1): en datos reales unit_price no es el precio (p. ej. 1084,05 para un
+    // gambón a 10,95 €/kg). El precio de verdad es bulk_price, por kilo. Su precio anterior no es comparable.
+    const byWeight = num(priceInfo?.selling_method) === 1;
+    const price = byWeight
+        ? num(priceInfo?.bulk_price) ?? num(priceInfo?.reference_price) ?? 0
+        : num(priceInfo?.unit_price) ?? num(priceInfo?.bulk_price) ?? 0;
+    // En datos reales price_decreased viene siempre en falso aunque haya bajada: no se usa.
+    const previous = byWeight ? null : num(priceInfo?.previous_unit_price);
 
     const referencePrice = num(priceInfo?.reference_price);
     const referenceFormat = str(priceInfo?.reference_format);
@@ -339,9 +345,9 @@ function parseProduct(rawProduct: unknown, subcategory: string, aisle: string): 
     const size = unitSize !== null && sizeFormat ? `${unitSize.toLocaleString("es-ES")} ${sizeFormat}` : "";
     const packaging = [str(product.packaging), size].filter(Boolean).join(" ");
 
-    // Marca propia de Mercadona de producto nuevo (no da fecha de lanzamiento)
+    // Marcas propias de Mercadona de producto nuevo (no da fecha de lanzamiento)
     const badges = asObj(product.badges);
-    const isNew = priceInfo?.is_new === true || product.is_new === true || badges?.is_new === true;
+    const isNew = priceInfo?.is_new === true || product.is_new === true || badges?.is_new === true || product.is_new_arrival === true;
 
     return {
         mercadonaId,
@@ -354,6 +360,7 @@ function parseProduct(rawProduct: unknown, subcategory: string, aisle: string): 
         subcategory,
         aisle,
         isNew,
+        byWeight,
     };
 }
 
@@ -640,9 +647,13 @@ function parseDetail(json: unknown, mercadonaId: string): ProductDetail {
     const root = asObj(json) ?? {};
     const details = asObj(root.details) ?? {};
     const nutrition = asObj(root.nutrition_information) ?? {};
+    // "zoom" son 3600 px (demasiado para el móvil): se pide a 900 px; si no hay, "regular" (600 px)
     const photos = asArr(root.photos)
         .map(asObj)
-        .map(photo => safeImageUrl(photo?.zoom) || safeImageUrl(photo?.regular) || safeImageUrl(photo?.thumbnail))
+        .map(photo => {
+            const zoom = safeImageUrl(photo?.zoom);
+            return zoom ? largeImageUrl(zoom) : safeImageUrl(photo?.regular) || safeImageUrl(photo?.thumbnail);
+        })
         .filter(Boolean);
     const { aisle, subcategory } = categoryNames(root);
     const pick = (...values: unknown[]) => values.map(plainText).find(Boolean) ?? "";
@@ -717,6 +728,7 @@ export function toListItem(product: MercadonaProduct): listItem {
         packaging: product.packaging || undefined,
         unitPrice: product.unitPrice || undefined,
         isNew: product.isNew || undefined,
+        byWeight: product.byWeight || undefined,
     };
 }
 
