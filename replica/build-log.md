@@ -265,6 +265,7 @@ Pruebas: 322 de regresión (e2e3–e2e23, incluidas sin conexión, política de 
 - Son las mismas pestañas de antes (mismo papel de pestaña, mismos `id`, flechas del teclado): en escritorio siguen arriba y la lista en la columna derecha. Se decide con `matchMedia` (`useMediaQuery`), así solo existe una fila de pestañas a la vez y no hay `id` repetidos.
 - La barra está siempre a mano, también mientras se busca. Tocar una sección deja de buscar, la enseña y sube arriba. Tocar la sección en la que ya estás también sube arriba. Mientras se busca, ninguna sección sale marcada.
 - Números sobre los iconos: amarillo en Novedades y Rebajas, neutro en Favoritos; "99+" si pasa de 99.
+- Sin estilo al pasar el ratón en la barra: en el iPhone el "hover" se queda pegado tras tocar, y al buscar después la última sección tocada parecía seguir marcada.
 - Letra de 14 px desde 390 px de ancho, 13 px de 360 a 389 y 12 px por debajo de 360 (con 14 px, "Novedades" no cabe en 360 sin pegarse a "Rebajas"). Comprobado en 320, 360 y 390 px: los nombres no se pisan y todas las zonas de toque son de 56 px de alto.
 - "Volver arriba" queda encima de la barra sin taparla. La barra va dentro de `<nav aria-label="Menú principal">` (axe pedía que todo estuviera en una zona con nombre).
 - Vercel: creada a petición del dueño la regla de cortafuegos "Límite /api por IP" (400 peticiones por minuto por IP a `/api/`). Vercel añadió además sus reglas básicas en modo solo registrar.
