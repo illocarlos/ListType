@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ChevronLeft, Info, Plus, RefreshCw } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
 import { fetchProductDetail, fetchSimilars, largeImageUrl, mercadonaDetail, MercadonaError, toListItem } from "../helpers/mercadona";
 import type { ProductDetail } from "../helpers/mercadona";
@@ -16,6 +16,13 @@ type ProductSheetProps = {
     isFavorite: (id: number) => boolean,
     onToggleFavorite: (item: listItem) => void,
     history: PricePoint[],
+    // Abrir la ficha de un parecido más barato (dentro de la misma ventana)
+    onOpenSimilar?: (item: listItem) => void,
+    // Producto del que se viene, para poder volver
+    backTo?: listItem | null,
+    onBack?: () => void,
+    // Se ha llegado aquí desde otra ficha (parecido o "Volver"): subir arriba y mover el foco
+    navigated?: boolean,
 }
 
 type LoadState = "loading" | "ready" | "error";
@@ -24,8 +31,17 @@ const dayLabel = (day: number) =>
     new Date(day * 86_400_000).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 
 // Contenido de la ficha: se pide a Mercadona solo al abrirla
-const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onToggleFavorite, history }: ProductSheetProps) => {
+const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onToggleFavorite, history, onOpenSimilar, backTo, onBack, navigated = false }: ProductSheetProps) => {
     const id = item.mercadonaId ?? "";
+    const rootRef = useRef<HTMLDivElement>(null);
+    const backRef = useRef<HTMLButtonElement>(null);
+
+    // Al cambiar de producto dentro de la ficha: se vuelve arriba y el foco va a "Volver" (o al principio de la ficha)
+    useEffect(() => {
+        if (!navigated) return;
+        rootRef.current?.scrollIntoView({ block: "start" });
+        (backRef.current ?? rootRef.current)?.focus({ preventScroll: true });
+    }, [navigated]);
     const [detail, setDetail] = useState<ProductDetail | null>(null);
     const [detailState, setDetailState] = useState<LoadState>("loading");
     const [detailError, setDetailError] = useState<string>("");
@@ -78,7 +94,19 @@ const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onT
     const photo = detail?.photos[0] || (item.image ? largeImageUrl(item.image) : "");
 
     return (
-        <div className="p-4 space-y-5">
+        <div ref={rootRef} tabIndex={-1} aria-label={`Ficha de ${item.name}`} className="p-4 space-y-5 focus:outline-none">
+            {backTo && onBack && (
+                <button
+                    ref={backRef}
+                    type="button"
+                    onClick={onBack}
+                    className="-ml-1 inline-flex min-h-[44px] max-w-full items-center gap-1 rounded-md pr-2 text-left text-base font-semibold text-accent-strong hover:underline underline-offset-2"
+                >
+                    <ChevronLeft size={20} aria-hidden="true" className="flex-none" />
+                    <span className="break-words">Volver a {backTo.name}</span>
+                </button>
+            )}
+
             {photo && (
                 <img
                     src={photo}
@@ -185,7 +213,19 @@ const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onT
                             return (
                                 <li key={product.mercadonaId} className="flex items-center gap-3 rounded-md bg-surface p-3">
                                     <div className="min-w-0 flex-1">
-                                        <p className="font-semibold leading-snug break-words">{product.name}</p>
+                                        <p className="font-semibold leading-snug break-words">
+                                            {onOpenSimilar ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenSimilar(alternative)}
+                                                    className="inline text-left font-semibold leading-snug break-words hover:underline underline-offset-2 rounded-sm"
+                                                >
+                                                    <span className="sr-only">Ficha de </span>
+                                                    {product.name}
+                                                    <Info size={16} aria-hidden="true" className="ml-1 inline-block align-[-2px] text-accent" />
+                                                </button>
+                                            ) : product.name}
+                                        </p>
                                         <p className="text-sm text-muted break-words">{mercadonaDetail(product)}</p>
                                         <p className="mt-1 text-base tabular">
                                             <span className="font-bold">{formatCurrency(product.price)}</span>
