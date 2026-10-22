@@ -45,5 +45,8 @@ export type MercadonaProduct = {
     // Novedad: lista oficial de Mercadona o marca is_new / is_new_arrival
     isNew?: boolean,
     // Granel (selling_method 1): el precio es el de bulk_price, por kilo
-    byWeight?: boolean
+    byWeight?: boolean,
+    // Cuándo se descargó este dato de Mercadona (ms). Si el mismo producto llega por dos caminos
+    // (pasillo y rebajas), manda el precio más reciente. No se guarda: se pone al leer la caché.
+    fetchedAt?: number
 }
