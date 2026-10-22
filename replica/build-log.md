@@ -285,3 +285,25 @@ Pruebas: 322 de regresión (e2e3–e2e23, incluidas sin conexión, política de 
 - El proxy se identifica ante OpenStreetMap con la dirección nueva.
 - Pendiente: cuando Anita se haya mudado, redirigir la dirección vieja a la nueva. No antes, porque una redirección deja atrás los datos sin traer.
 - Pruebas: 25/25 de la mudanza (las dos direcciones simuladas en el navegador, enlace, pegar, código roto, manipulado y unir) + regresión completa.
+
+## 2026-10-22 · PDF en cuadrícula, buscar en plural, botón atrás y Vaciar lista
+
+Aprobado por el dueño tras el segundo análisis: los tres fallos de prioridad alta y el PDF en cuadrícula, en una sola publicación.
+
+- **PDF en cuadrícula** de 3 tarjetas por fila:
+  - Foto de 42 mm, pedida a 400 px (antes 28 mm en lista). Caben 9 productos por hoja (antes 6): 30 productos ocupan 4 hojas en vez de 5.
+  - Cada tarjeta lleva el nombre numerado (hasta 3 líneas, con "…" si es más largo), el formato y precio por kilo, y abajo casilla, cantidad y precio.
+  - Lo apuntado a mano sale con su inicial en gris.
+  - La raya del total va con el verde de la app y el total ya no salta solo a otra hoja (9 productos y total en 1 hoja).
+  - Se descartó doblar la foto en la lista (56 mm): solo cabían 3 productos por hoja.
+- **Buscar en plural**:
+  - Antes, "plátanos" daba 0 resultados, "yogures" 0, "pizzas" 2 y "fresas" 5. Ahora también vale el singular ("plátano", "yogur"; "nueces" → "nuez"), pero solo al principio de una palabra.
+  - Así "ajos" no encuentra "bajo en sal"; un singular de 3 letras tiene que ser la palabra entera ("ajo", "uva").
+  - Lo escrito sigue valiendo en cualquier parte del nombre, como antes. Medido con el catálogo real: "plátanos" 15 resultados, "yogures" 49, con "Plátano de Canarias" el primero.
+- **Botón atrás del móvil**: antes, con la lista o la ficha abiertas, "atrás" salía de la app (reproducido).
+  - Ahora cada ventana abierta añade un paso al historial y "atrás" cierra la de arriba: la ficha y luego la lista.
+  - Al cerrar con "Cerrar" o Escape se quita ese paso, así que no quedan pasos sueltos. Un único escuchador cierra siempre solo la de arriba.
+- **Vaciar la lista** al final de la lista, lejos del botón del PDF.
+  - Sin ventana de confirmar: sale "Has vaciado la lista (N productos)" con **Deshacer**, que tiene el foco.
+  - Deshacer devuelve todo con sus cantidades. Deja de ofrecerse en cuanto se apunta algo nuevo.
+- Pruebas: 30/30 nuevas + regresión completa (e2e3–e2e27, incluidas la barra y la mudanza); auditoría con 0 problemas axe. Se adaptaron dos comprobaciones del PDF al nuevo formato: los nombres ocupan varias líneas y la cantidad va aparte.

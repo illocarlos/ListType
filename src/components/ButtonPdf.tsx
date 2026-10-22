@@ -38,17 +38,25 @@ type ButtonPdfProps = {
     order: orderItem[]
 }
 
-// Medidas en milímetros (A4: 210 x 297). "Modo tienda": letra grande y una casilla
-// por producto para tacharlo a boli al meterlo en el carro.
+// Medidas en milímetros (A4: 210 x 297). "Modo tienda": cuadrícula de 3 tarjetas por fila con la foto
+// grande y una casilla por producto para tacharlo a boli al meterlo en el carro.
+// A petición del dueño, fotos más grandes: 42 mm (antes 28 en lista) y caben 9 productos por hoja (antes 6).
 const MARGIN = 18;
 const TOP = 20;
-const CHECKBOX = 7;
-// Foto de cada producto: 28 mm (el doble que antes, a petición del dueño). Se pide a 240 px para que se vea nítida impresa.
-const IMAGE_SIZE = 28;
-const IMAGE_PX = 240;
-const LINE_HEIGHT = 7;
-const NAME_SIZE = 14;
-const DETAIL_SIZE = 11;
+const CHECKBOX = 6;
+const COLUMNS = 3;
+const GAP = 5;
+const PAD = 3;
+const PHOTO = 42;
+// Se pide a 400 px para que la foto se vea nítida impresa (unos 240 ppp a 42 mm)
+const IMAGE_PX = 400;
+const NAME_SIZE = 11;
+const NAME_LINE = 4.6;
+const NAME_LINES = 3;
+const DETAIL_SIZE = 8.5;
+const TOTAL_SIZE = 14;
+// Verde de la app (accent-strong) para la raya del total
+const ACCENT: [number, number, number] = [31, 79, 49];
 
 const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
     const [generating, setGenerating] = useState(false);
@@ -96,67 +104,90 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
             doc.text('Marca cada casilla al meterlo en el carro.', MARGIN, TOP + 7);
             doc.setTextColor(0);
 
-            // Datos
-            let yPosition = 42;
+            // Tarjetas: foto, nombre (hasta 3 líneas), formato y precio por kilo, y abajo casilla, cantidad y precio
+            const cardWidth = (pageWidth - MARGIN * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
+            const cardHeight = PAD + PHOTO + 3 + NAME_LINES * NAME_LINE + 4 + CHECKBOX + PAD;
+            // 3 filas por hoja; en la primera, debajo del título (y el total cabe en la misma hoja)
+            let rowTop = 32;
 
             order.forEach((item, index) => {
-                const image = images[index];
-                const imageX = MARGIN + CHECKBOX + 4;
-                const textX = image ? imageX + IMAGE_SIZE + 4 : imageX;
-                const priceWidth = 30;
-
-                doc.setFontSize(NAME_SIZE);
-                const nameLines: string[] = doc.splitTextToSize(
-                    `${index + 1}. ${item.name} - Cantidad: ${item.quantity}${item.byWeight ? ' kg aprox.' : ''}`,
-                    pageWidth - textX - MARGIN - priceWidth
-                );
-                const detail = [item.packaging, item.unitPrice].filter(Boolean).join(' · ');
-                const textHeight = nameLines.length * LINE_HEIGHT + (detail ? 6 : 0);
-                const rowHeight = Math.max(image ? IMAGE_SIZE + 2 : CHECKBOX + 2, textHeight) + 5;
-
-                // Salto de página si la línea no cabe
-                if (yPosition + rowHeight > bottom) {
+                const column = index % COLUMNS;
+                if (column === 0 && index > 0) rowTop += cardHeight + GAP;
+                // Salto de página si la fila no cabe
+                if (column === 0 && rowTop + cardHeight > bottom) {
                     doc.addPage();
-                    yPosition = TOP;
+                    rowTop = TOP;
                 }
+                const x = MARGIN + column * (cardWidth + GAP);
+                const inner = cardWidth - PAD * 2;
 
-                // Casilla para tachar
-                doc.setDrawColor(40);
-                doc.setLineWidth(0.5);
-                doc.rect(MARGIN, yPosition - 5.5, CHECKBOX, CHECKBOX);
+                doc.setDrawColor(200);
+                doc.setLineWidth(0.3);
+                doc.roundedRect(x, rowTop, cardWidth, cardHeight, 2, 2);
 
+                // Foto (o la inicial en gris si es un producto apuntado a mano o la foto no se pudo traer)
+                const photoX = x + (cardWidth - PHOTO) / 2;
+                const photoY = rowTop + PAD;
+                const image = images[index];
                 if (image) {
-                    doc.addImage(image, 'JPEG', imageX, yPosition - 6, IMAGE_SIZE, IMAGE_SIZE);
-                }
-
-                doc.setFontSize(NAME_SIZE);
-                doc.text(nameLines, textX, yPosition);
-
-                if (item.price > 0) {
-                    doc.text(formatCurrency(item.price * item.quantity), pageWidth - MARGIN, yPosition, { align: 'right' });
-                }
-
-                if (detail) {
-                    doc.setFontSize(DETAIL_SIZE);
-                    doc.setTextColor(90);
-                    doc.text(detail, textX, yPosition + (nameLines.length - 1) * LINE_HEIGHT + 6);
+                    doc.addImage(image, 'JPEG', photoX, photoY, PHOTO, PHOTO);
+                } else {
+                    doc.setFillColor(236, 240, 233);
+                    doc.rect(photoX, photoY, PHOTO, PHOTO, 'F');
+                    doc.setFontSize(28);
+                    doc.setTextColor(120);
+                    doc.text(item.name.trim().charAt(0).toUpperCase() || '·', photoX + PHOTO / 2, photoY + PHOTO / 2 + 4, { align: 'center' });
                     doc.setTextColor(0);
                 }
 
-                yPosition += rowHeight;
+                // Nombre: hasta 3 líneas; si es más largo, la última acaba en "…"
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(NAME_SIZE);
+                let lines: string[] = doc.splitTextToSize(`${index + 1}. ${item.name}`, inner);
+                if (lines.length > NAME_LINES) {
+                    lines = lines.slice(0, NAME_LINES);
+                    let last = lines[NAME_LINES - 1];
+                    while (last.length > 1 && doc.getTextWidth(`${last}…`) > inner) last = last.slice(0, -1);
+                    lines[NAME_LINES - 1] = `${last.trimEnd()}…`;
+                }
+                const nameY = photoY + PHOTO + 5;
+                doc.text(lines, x + PAD, nameY);
+
+                // Formato y precio por kilo/litro, en gris y en una línea
+                const detail = [item.packaging, item.unitPrice].filter(Boolean).join(' · ');
+                if (detail) {
+                    doc.setFontSize(DETAIL_SIZE);
+                    doc.setTextColor(90);
+                    doc.text(doc.splitTextToSize(detail, inner)[0], x + PAD, nameY + NAME_LINES * NAME_LINE);
+                    doc.setTextColor(0);
+                }
+
+                // Casilla, cantidad y precio
+                const lineY = rowTop + cardHeight - PAD - CHECKBOX;
+                doc.setDrawColor(40);
+                doc.setLineWidth(0.5);
+                doc.rect(x + PAD, lineY, CHECKBOX, CHECKBOX);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(NAME_SIZE);
+                doc.text(item.byWeight ? `${item.quantity} kg aprox.` : `x${item.quantity}`, x + PAD + CHECKBOX + 2, lineY + CHECKBOX - 1.5);
+                if (item.price > 0) {
+                    doc.text(formatCurrency(item.price * item.quantity), x + cardWidth - PAD, lineY + CHECKBOX - 1.5, { align: 'right' });
+                }
+                doc.setFont('helvetica', 'normal');
             });
 
-            // Total
+            // Total: debajo de la última fila; solo pasa a otra hoja si de verdad no cabe (margen inferior de 10 mm)
             const total = order.reduce((sum, item) => sum + item.price * item.quantity, 0);
-            if (yPosition + 10 > bottom) {
+            let lineY = rowTop + cardHeight + 4;
+            if (lineY + 7 > pageHeight - 10) {
                 doc.addPage();
-                yPosition = TOP;
+                lineY = TOP;
             }
-            doc.setDrawColor(16, 185, 129);
-            doc.setLineWidth(0.3);
-            doc.line(MARGIN, yPosition - 2, pageWidth - MARGIN, yPosition - 2);
-            doc.setFontSize(NAME_SIZE);
-            doc.text(`Total aprox: ${formatCurrency(total)}`, pageWidth - MARGIN, yPosition + 5, { align: 'right' });
+            doc.setDrawColor(...ACCENT);
+            doc.setLineWidth(0.4);
+            doc.line(MARGIN, lineY, pageWidth - MARGIN, lineY);
+            doc.setFontSize(TOTAL_SIZE);
+            doc.text(`Total aprox: ${formatCurrency(total)}`, pageWidth - MARGIN, lineY + 7, { align: 'right' });
 
             const file = new File([doc.output('blob')], FILE_NAME, { type: 'application/pdf' });
             if (canShareFile(file)) {
