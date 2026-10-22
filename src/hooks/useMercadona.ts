@@ -7,9 +7,10 @@ import {
     getWarehouse,
     getZone,
     indexAllAisles,
+    isMercadonaPaused,
     MercadonaError,
     normalizeText,
-    pricesSavedAt,
+    pricesFetchedAt,
     refreshStaleAisles,
     STALE_WARNING_MS,
     resolvePostalCode,
@@ -130,8 +131,9 @@ export default function useMercadona() {
         const current = latest.current;
         if (refreshingRef.current || current.groupsState !== "ready" || current.indexState === "running") return;
         const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-        if (connection?.saveData) {
-            // Con "ahorro de datos" no se renueva por detrás: si los precios son antiguos, que se avise
+        // Con "ahorro de datos", o en pausa tras un rechazo de Mercadona (30 min), no se renueva por detrás.
+        // Si los precios son antiguos, que se avise.
+        if (connection?.saveData || isMercadonaPaused()) {
             setRefreshTried(true);
             return;
         }
@@ -234,16 +236,17 @@ export default function useMercadona() {
 
     // Lista preparada para buscar: pasillos + rebajas + novedades, con el nombre normalizado una vez.
     // "Novedad" = lo que Mercadona publica como novedad o marca como nuevo.
-    // Rebajas: su precio y su precio anterior mandan sobre la copia del pasillo, que puede tener hasta 24 h.
-    // La lista de rebajas se renueva cada hora (HOME_TTL_MS en helpers/mercadona.ts), así que suele ser
-    // la más reciente. Si no mandase, una bajada de hoy desaparecería.
+    // Rebajas: si el producto también está en un pasillo guardado, manda el precio descargado más
+    // recientemente. Si la rebaja es más nueva, una bajada de hoy no desaparece por una copia vieja del
+    // pasillo; si el pasillo es más nuevo y ya no trae precio anterior, la rebaja ha terminado y no sale.
     const searchable = useMemo<SearchableProduct[]>(() => {
         const newIds = new Set(newArrivals.map(product => product.mercadonaId));
         const merged = new Map(pool);
         for (const product of priceDrops) {
             const existing = merged.get(product.mercadonaId);
-            merged.set(product.mercadonaId, existing && product.price > 0
-                ? { ...existing, price: product.price, previousPrice: product.previousPrice, unitPrice: product.unitPrice || existing.unitPrice }
+            const dropIsNewer = (product.fetchedAt ?? 0) >= (existing?.fetchedAt ?? 0);
+            merged.set(product.mercadonaId, existing && product.price > 0 && dropIsNewer
+                ? { ...existing, price: product.price, previousPrice: product.previousPrice, unitPrice: product.unitPrice || existing.unitPrice, fetchedAt: product.fetchedAt }
                 : existing ?? product);
         }
         for (const product of newArrivals) {
@@ -283,7 +286,7 @@ export default function useMercadona() {
     // Se recalcula cada vez que llegan productos (pool cambia al descargar un pasillo).
     const pricesUpdatedAt = useMemo(() => {
         void pool;
-        return pricesSavedAt(wh);
+        return pricesFetchedAt(wh);
     }, [pool, wh]);
     const pricesStale = refreshTried && pricesUpdatedAt !== null && Date.now() - pricesUpdatedAt > STALE_WARNING_MS;
 

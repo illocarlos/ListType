@@ -193,3 +193,14 @@ Revisión de seguridad y fallos de todo el código. Se aplican los cuatro de pri
 - **Fuente propia**: Onest desde `@fontsource/onest` 5.3.1 (juego latino, 5 grosores, ~15 kB cada uno). Google ya no recibe la IP de cada usuario.
 - Pendiente (baja): limpieza del modo sin conexión, textos ("pulsa «Añadir»", "total: 0,00 €"), WhatsApp con listas largas, proxy de fotos (tamaño antes de descargar), aviso de favoritos rebajados con secciones cerradas. Regla de límite de peticiones en el panel de Vercel (la tiene que crear el dueño).
 - Pruebas: 22/22 proxy + 8/8 frescura + 10/10 con la política de seguridad + 249 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · Rebajas cada 12 h, edad real del precio y pausa tras un rechazo
+
+- El usuario señaló que renovar rebajas cada hora no tenía sentido. Cierto: el CDN de Vercel solo renueva su copia cada 12 h, así que preguntar más a menudo devuelve lo mismo (no cargaba a Mercadona, pero no aportaba). Ahora **12 h** en el móvil.
+- Para que eso no enseñe rebajas terminadas: **manda el precio más reciente**, venga de la rebaja o del pasillo. La edad es la **real del contenido**: el proxy marca cada respuesta con `x-listtype-fetched-at` (hora a la que la sacó de Mercadona) y el CDN guarda la marca con la copia. Sin marca (entradas antiguas, desarrollo local) se usa cuándo se guardó.
+- Efecto secundario detectado y corregido al revisar: con `stale-if-error` (publicado antes) el CDN puede dar una copia de hasta ~2 días mientras Mercadona falla; con la hora del móvil, el aviso de precios antiguos habría llegado un día tarde y "lo más reciente" podía elegir lo más viejo. Con la edad real, no.
+- El móvil sigue decidiendo cuándo renovar por la hora a la que guardó (24 h pasillos, 12 h rebajas), no por la edad del contenido: si no, mientras el CDN da copias viejas, cada apertura reintentaría y sumaría peticiones a Mercadona.
+- **Pausa de 30 min** tras un rechazo o caída de Mercadona (no por 404, sin conexión ni errores de la app): ni las renovaciones automáticas ni las listas sin guardar preguntan; se enseña lo guardado. Se levanta en cuanto Mercadona responde bien (también al aceptar un código postal). Lo que pide la persona (abrir un pasillo, la ficha) no se bloquea.
+- **Peticiones duplicadas**: al abrir, dos partes pedían las rebajas a la vez; ahora sale una sola petición (las iguales en curso se comparten).
+- Comprobado contra datos reales: ningún id con cero delante (las reglas estrictas del proxy no rompen nada), 69 ids con decimal (admitidos), todas las fotos de prod-mercadona.imgix.net (la CSP no bloquea ninguna). El aviso de precios antiguos cuesta 0,2 ms por lectura.
+- Pruebas: 8/8 edad real + 12/12 rebajas + 13/13 frescura y pausa + 276 de regresión; auditoría sin problemas.

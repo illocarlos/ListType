@@ -245,6 +245,9 @@ export default async function handler(req, res) {
         }
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('x-listtype-proxy', '1');
+        // Hora a la que se sacó de Mercadona. El CDN la guarda con la copia, así el móvil sabe la edad
+        // real del precio aunque reciba una copia de hace horas (o la de stale-if-error).
+        res.setHeader('x-listtype-fetched-at', String(Date.now()));
         // Productos y precios: el CDN de Vercel guarda la copia 12 h y solo puede entregar una copia
         // caducada durante 1 h más mientras busca la nueva. Con la caché de 24 h del móvil, el retraso
         // máximo de un precio queda en día y medio aproximadamente, con la mitad de peticiones que a 6 h.
