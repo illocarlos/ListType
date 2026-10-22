@@ -245,8 +245,12 @@ export default function useMercadona() {
         return searchable.filter(product => product.isNew || ids.has(product.mercadonaId));
     }, [searchable, newArrivals]);
 
+    // Rebajas: solo lo que trae un precio anterior mayor que el actual (bajada comprobable).
+    // La respuesta no está documentada y puede traer otros productos; esos se descartan.
     const drops = useMemo(
-        () => priceDrops.map(product => searchableById.get(product.mercadonaId) ?? { ...product, searchName: normalizeText(product.name) }),
+        () => priceDrops
+            .map(product => searchableById.get(product.mercadonaId) ?? { ...product, searchName: normalizeText(product.name) })
+            .filter(product => product.previousPrice !== null && product.price > 0 && product.previousPrice > product.price + 0.005),
         [priceDrops, searchableById]
     );
 

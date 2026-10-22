@@ -82,8 +82,10 @@ function App() {
   const noveltiesByAisle = useMemo(() => groupByAisle(novelties), [novelties]);
 
   // Rebajas: la lista oficial de bajadas de precio de Mercadona
+  // Primero los pasillos; dentro de cada uno, de mayor a menor descuento
+  const discount = (product: SearchableProduct) => product.previousPrice ? (product.previousPrice - product.price) / product.previousPrice : 0;
   const drops = useMemo(
-    () => [...mercadona.drops].sort((a, b) => a.aisle.localeCompare(b.aisle, "es") || a.searchName.localeCompare(b.searchName, "es", { numeric: true })),
+    () => [...mercadona.drops].sort((a, b) => a.aisle.localeCompare(b.aisle, "es") || discount(b) - discount(a)),
     [mercadona.drops]
   );
   const dropsByAisle = useMemo(() => groupByAisle(drops), [drops]);
@@ -566,7 +568,7 @@ function App() {
                     <h2 className="text-lg font-bold">Rebajas de Mercadona</h2>
                     {drops.length > 0 && <span className="text-sm text-muted tabular">{drops.length}</span>}
                   </div>
-                  <p className="text-sm text-muted mb-4">Productos que han bajado de precio. El precio de antes sale tachado.</p>
+                  <p className="text-sm text-muted mb-4">Solo productos con el precio de antes comprobado: sale tachado junto al descuento.</p>
 
                   {drops.length === 0 ? (
                     <div className="rounded-md bg-surface p-6 text-center">
