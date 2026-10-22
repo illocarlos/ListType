@@ -18,26 +18,40 @@ type ProductRowProps = {
     onOpenDetails?: (item: listItem) => void,
 }
 
-// Fila de producto pensada para todo el mundo:
-// nombre completo (sin cortar), textos de 14 px como mínimo, botones de 44 px y "Añadir" escrito.
+// Fila de producto compacta pensada para todo el mundo:
+// nombre completo (sin cortar), textos de 14 px como mínimo y botones de 44 px.
+// Precio y botón + van en la misma línea; la ficha se abre tocando el nombre (lleva el icono de información).
 const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite, note, onOpenDetails }: ProductRowProps) => {
     const inList = quantity > 0;
+    const canOpen = Boolean(onOpenDetails && item.mercadonaId);
 
     return (
         <li
-            className={`flex gap-3 px-3 py-3 rounded-md transition-colors duration-200 ${inList ? "bg-accent-soft" : "bg-surface"}`}
+            className={`flex gap-3 px-3 py-2 rounded-md transition-colors duration-200 ${inList ? "bg-accent-soft" : "bg-surface"}`}
         >
-            <Thumb item={item} />
+            <div className="pt-1">
+                <Thumb item={item} />
+            </div>
 
             <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-1">
-                    <p className="flex-1 text-base font-semibold leading-snug break-words">
+                    <p className="flex-1 pt-1 text-base font-semibold leading-snug break-words">
                         {item.isNew && (
                             <span className="mr-1.5 inline-block rounded-pill bg-highlight px-2 align-[2px] text-sm font-bold leading-6 text-on-highlight">
                                 Novedad
                             </span>
                         )}
-                        {item.name}
+                        {canOpen ? (
+                            <button
+                                type="button"
+                                onClick={() => onOpenDetails?.(item)}
+                                className="inline text-left font-semibold leading-snug break-words hover:underline underline-offset-2 rounded-sm"
+                            >
+                                <span className="sr-only">Ficha de </span>
+                                {item.name}
+                                <Info size={16} aria-hidden="true" className="ml-1 inline-block align-[-2px] text-accent" />
+                            </button>
+                        ) : item.name}
                     </p>
                     {onToggleFavorite && (
                         <button
@@ -52,8 +66,6 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                     )}
                 </div>
 
-                {detail && <p className="text-sm text-muted break-words">{detail}</p>}
-
                 {note && (
                     <p className={`mt-1 flex items-center gap-1.5 text-sm font-semibold ${note.direction === "up" ? "text-danger" : "text-accent-strong"}`}>
                         {note.direction === "up"
@@ -63,8 +75,8 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                     </p>
                 )}
 
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="tabular">
+                <div className="mt-0.5 flex items-center gap-2">
+                    <p className="min-w-0 flex-1 tabular leading-snug">
                         {item.price > 0 && (
                             <span className="text-base font-bold">
                                 {formatCurrency(item.price)}
@@ -83,20 +95,10 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                                 </span>
                             </>
                         ) : null}
+                        {detail && <span className="block text-sm text-muted break-words">{detail}</span>}
                     </p>
 
-                    <div className="flex items-center gap-1">
-                    {onOpenDetails && item.mercadonaId && (
-                        <button
-                            type="button"
-                            onClick={() => onOpenDetails(item)}
-                            className="h-11 px-3 inline-flex items-center gap-1 rounded-pill text-base font-semibold text-accent-strong hover:bg-surface-sunk"
-                        >
-                            <Info size={18} aria-hidden="true" />
-                            Ficha<span className="sr-only"> de {item.name}</span>
-                        </button>
-                    )}
-
+                    <div className="flex-none flex items-center">
                     {inList ? (
                         <div className="flex items-center rounded-pill bg-surface border border-border">
                             <button
@@ -126,10 +128,9 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                             type="button"
                             onClick={() => onAdd(item)}
                             aria-label={`Añadir ${item.name} a la lista`}
-                            className="h-11 px-4 inline-flex items-center gap-1.5 rounded-pill bg-accent text-on-accent text-base font-semibold hover:bg-accent-strong"
+                            className="h-11 w-11 grid place-items-center rounded-full bg-accent text-on-accent hover:bg-accent-strong"
                         >
-                            <Plus size={20} aria-hidden="true" />
-                            Añadir
+                            <Plus size={22} aria-hidden="true" />
                         </button>
                     )}
                     </div>

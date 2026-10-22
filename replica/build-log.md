@@ -155,3 +155,11 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - **Títulos**: Novedades y Rebajas se agrupan por sección grande; los productos de pasillos abiertos se llevan a su sección para no salir bajo dos títulos.
 - Sin verificar: `unit_price` de cada rebaja (cortado en la impresión) y `products/<id>/similars/`.
 - Pruebas: 8/8 nuevas + 193 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · Pasillos plegables, fila compacta y Volver arriba (opción B + C + E)
+
+- Medido con el catálogo real: un pasillo de 54 productos eran 11 pantallas de scroll y el más grande (132) 25; la fila medía ~150 px. Maqueta interactiva comparando opciones; el usuario eligió B + C con Volver arriba.
+- **B, secciones plegables** (`Collapsible.tsx`): subcategorías de cada pasillo, y secciones de Rebajas y Novedades, cerradas al entrar con su número de productos ("Pollo · 47 productos"). Si solo hay una, se abre sola. Los productos solo se pintan al abrir. Botón dentro de `h3` con `aria-expanded`/`aria-controls`.
+- **C, fila compacta** (`ProductRow.tsx`, en toda la app): precio, envase y + en la misma línea; la ficha se abre tocando el nombre (icono de información, nombre accesible "Ficha de …"). El + es un botón redondo de 44 px con nombre "Añadir … a la lista". Media real en Pollo: 112 px.
+- **E, Volver arriba** (`BackToTop.tsx`): aparece al bajar más de 1,2 pantallas, a la izquierda y encima de la barra "Ver lista" para no tapar los +; sube y deja el foco en el título de la app; respeta "reducir movimiento".
+- Pruebas: 18/18 nuevas con el catálogo real + 193 de regresión (Rebajas adaptada a secciones cerradas); auditoría sin problemas.
