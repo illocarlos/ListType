@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowUp } from "lucide-react";
 
 // Botón "Volver arriba": aparece al bajar algo más de una pantalla.
-// En el móvil va a la izquierda, encima de la barra "Ver lista", para no tapar los botones + de la derecha.
+// En el móvil va a la izquierda, encima de la barra de abajo (secciones y lista), para no tapar los botones + de la derecha.
 // Al pulsarlo, el foco pasa al título de la app para que el teclado y el lector de pantalla también "suban".
 const BackToTop = ({ focusTargetId }: { focusTargetId: string }) => {
     const [visible, setVisible] = useState<boolean>(false);
