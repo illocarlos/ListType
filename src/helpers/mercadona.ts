@@ -7,6 +7,11 @@ const IMG_PROXY = "/api/mercadona-img";
 const CACHE_PREFIX = "mercadona:v1:";
 const WAREHOUSE_KEY = `${CACHE_PREFIX}wh`;
 const TTL_MS = 24 * 60 * 60 * 1000;
+// Rebajas y novedades: se renuevan cada hora en el móvil. No cargan a Mercadona: la copia la sirve
+// el CDN de Vercel (12 h). Así la lista de rebajas suele ser más reciente que la de los pasillos (24 h).
+const HOME_TTL_MS = 60 * 60 * 1000;
+// Si los precios guardados tienen más de esto y no se han podido renovar, se avisa
+export const STALE_WARNING_MS = 48 * 60 * 60 * 1000;
 
 // Almacén de Sevilla. Sin verificar: se puede cambiar desde el panel de Mercadona
 export const DEFAULT_WAREHOUSE = "svq1";
@@ -24,6 +29,7 @@ function describeStatus(status: number, origin: ErrorOrigin): string {
     if (origin === "red") return `No hay conexión a internet. ${calm} (Código R0)`;
     if (origin === "vercel") return `Ahora mismo no se pueden ver los productos de Mercadona. ${calm} (Código V${status})`;
     if (status === 429) return `Mercadona está muy ocupado. Inténtalo otra vez en un minuto. ${calm} (Código M429)`;
+    if (status === 404) return `Mercadona no tiene esto disponible ahora mismo en tu zona. ${calm} (Código M404)`;
     return `Ahora mismo Mercadona no responde. ${calm} (Código M${status})`;
 }
 
@@ -192,13 +198,13 @@ export function setWarehouse(wh: string): boolean {
 
 // ---------- Caché en localStorage ----------
 
-function readCache<T>(key: string, allowStale = false): T | null {
+function readCache<T>(key: string, allowStale = false, ttl = TTL_MS): T | null {
     try {
         const raw = localStorage.getItem(key);
         if (!raw) return null;
         const entry = JSON.parse(raw) as CacheEntry<T>;
         if (!entry || typeof entry.savedAt !== "number") return null;
-        if (!allowStale && Date.now() - entry.savedAt > TTL_MS) return null;
+        if (!allowStale && Date.now() - entry.savedAt > ttl) return null;
         return entry.data;
     } catch {
         return null;
@@ -468,6 +474,23 @@ export async function fetchAisle(wh: string, aisleId: number, aisleName: string,
     }
 }
 
+// Cuándo se descargaron por última vez precios de los pasillos de esta zona (la descarga más reciente).
+// Se lee solo el principio de cada entrada ({"savedAt":…), sin interpretar todo el pasillo.
+export function pricesSavedAt(wh: string): number | null {
+    const prefix = `${CACHE_PREFIX}${wh}:cat:`;
+    let newest: number | null = null;
+    for (const key of cacheKeys()) {
+        if (!key.startsWith(prefix)) continue;
+        try {
+            const match = (localStorage.getItem(key) || "").slice(0, 40).match(/^\{"savedAt":(\d+)/);
+            if (match) newest = Math.max(newest ?? 0, Number(match[1]));
+        } catch {
+            // entrada ilegible: se ignora
+        }
+    }
+    return newest;
+}
+
 function isAisleCached(wh: string, aisleId: number): boolean {
     return readCache<MercadonaProduct[]>(`${CACHE_PREFIX}${wh}:cat:${aisleId}`) !== null;
 }
@@ -495,7 +518,10 @@ export async function refreshStaleAisles(
             onAisle(await downloadAisle(wh, aisle.id, aisle.name));
             refreshed++;
         } catch (error) {
-            if (error instanceof MercadonaError && (error.status === 429 || error.origin !== "mercadona")) break;
+            // Solo se sigue si ese pasillo concreto ya no existe (404). Cualquier otro fallo (sin conexión,
+            // Mercadona ocupado o rechazando con 401/403/5xx) para la ronda: insistir con el resto de
+            // pasillos solo sumaría peticiones rechazadas. Se volverá a intentar más tarde.
+            if (!(error instanceof MercadonaError && error.status === 404)) break;
         }
         await wait(400);
     }
@@ -599,9 +625,9 @@ function findProducts(json: unknown, limit = 400): MercadonaProduct[] {
     return found;
 }
 
-async function cachedJson<T>(key: string, download: () => Promise<T>, force = false): Promise<T> {
+async function cachedJson<T>(key: string, download: () => Promise<T>, force = false, ttl = TTL_MS): Promise<T> {
     if (!force) {
-        const cached = readCache<T>(key);
+        const cached = readCache<T>(key, false, ttl);
         if (cached !== null) return cached;
     }
     try {
@@ -617,9 +643,9 @@ async function cachedJson<T>(key: string, download: () => Promise<T>, force = fa
 
 export type HomeList = "price-drops" | "new-arrivals";
 
-// Rebajas o novedades oficiales de Mercadona para la zona (caché de 24 h, como los pasillos)
+// Rebajas o novedades oficiales de Mercadona para la zona (caché de 1 h en el móvil; ver HOME_TTL_MS)
 export function fetchHomeList(wh: string, kind: HomeList, force = false): Promise<MercadonaProduct[]> {
-    return cachedJson(`${CACHE_PREFIX}${wh}:home:${kind}`, async () => findProducts(await getJson(`home/${kind}/`, wh)), force);
+    return cachedJson(`${CACHE_PREFIX}${wh}:home:${kind}`, async () => findProducts(await getJson(`home/${kind}/`, wh)), force, HOME_TTL_MS);
 }
 
 export type ProductDetail = {

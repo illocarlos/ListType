@@ -9,7 +9,9 @@ import {
     indexAllAisles,
     MercadonaError,
     normalizeText,
+    pricesSavedAt,
     refreshStaleAisles,
+    STALE_WARNING_MS,
     resolvePostalCode,
     setWarehouse,
     ZoneError,
@@ -83,7 +85,12 @@ export default function useMercadona() {
     useEffect(() => {
         dropOtherWarehouses(wh);
         setPool(new Map(getCachedProducts(wh).map(product => [product.mercadonaId, product])));
+        setRefreshTried(false);
     }, [wh]);
+
+    // ¿Se ha intentado ya renovar los precios en esta sesión? Hasta entonces no se avisa de precios antiguos
+    // (al abrir la app tras días sin usarla, se renuevan en segundos y el aviso solo parpadearía).
+    const [refreshTried, setRefreshTried] = useState<boolean>(false);
 
     useEffect(() => () => {
         runRef.current++;
@@ -107,6 +114,7 @@ export default function useMercadona() {
         ).then(result => {
             if (runRef.current !== run) return;
             setIndexState(result.done === result.total && result.failed === 0 ? "done" : "stopped");
+            setRefreshTried(true);
         });
     }, [wh, groups]);
 
@@ -122,7 +130,11 @@ export default function useMercadona() {
         const current = latest.current;
         if (refreshingRef.current || current.groupsState !== "ready" || current.indexState === "running") return;
         const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-        if (connection?.saveData) return;
+        if (connection?.saveData) {
+            // Con "ahorro de datos" no se renueva por detrás: si los precios son antiguos, que se avise
+            setRefreshTried(true);
+            return;
+        }
 
         refreshingRef.current = true;
         const run = runRef.current;
@@ -150,6 +162,7 @@ export default function useMercadona() {
             );
         } finally {
             refreshingRef.current = false;
+            if (runRef.current === run) setRefreshTried(true);
         }
     }, [loadHomeLists]);
 
@@ -221,8 +234,9 @@ export default function useMercadona() {
 
     // Lista preparada para buscar: pasillos + rebajas + novedades, con el nombre normalizado una vez.
     // "Novedad" = lo que Mercadona publica como novedad o marca como nuevo.
-    // Rebajas: su precio y su precio anterior mandan sobre la copia del pasillo, que puede tener hasta 24 h
-    // (la lista de rebajas se renueva cada vez que se vuelve a la app). Si no, una bajada de hoy desaparecería.
+    // Rebajas: su precio y su precio anterior mandan sobre la copia del pasillo, que puede tener hasta 24 h.
+    // La lista de rebajas se renueva cada hora (HOME_TTL_MS en helpers/mercadona.ts), así que suele ser
+    // la más reciente. Si no mandase, una bajada de hoy desaparecería.
     const searchable = useMemo<SearchableProduct[]>(() => {
         const newIds = new Set(newArrivals.map(product => product.mercadonaId));
         const merged = new Map(pool);
@@ -265,8 +279,18 @@ export default function useMercadona() {
         [priceDrops, searchableById]
     );
 
+    // Precios antiguos: cuándo se descargaron por última vez y si conviene avisar.
+    // Se recalcula cada vez que llegan productos (pool cambia al descargar un pasillo).
+    const pricesUpdatedAt = useMemo(() => {
+        void pool;
+        return pricesSavedAt(wh);
+    }, [pool, wh]);
+    const pricesStale = refreshTried && pricesUpdatedAt !== null && Date.now() - pricesUpdatedAt > STALE_WARNING_MS;
+
     return {
         wh,
+        pricesUpdatedAt,
+        pricesStale,
         zone,
         changePostalCode,
         groups,
