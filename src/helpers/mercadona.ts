@@ -17,6 +17,8 @@ export const STALE_WARNING_MS = 48 * 60 * 60 * 1000;
 // (se sigue enseñando lo guardado). Así nadie insiste mientras Mercadona está rechazando.
 const PAUSE_MS = 30 * 60 * 1000;
 const PAUSE_KEY = "mercadona-pause:v1";
+// Un dato con menos de esto lo acaba de sacar el proxy de Mercadona (no es una copia guardada del CDN)
+const FRESH_FROM_MERCADONA_MS = 2 * 60 * 1000;
 
 // Almacén de Sevilla. Sin verificar: se puede cambiar desde el panel de Mercadona
 export const DEFAULT_WAREHOUSE = "svq1";
@@ -81,7 +83,7 @@ export class ZoneError extends Error {
     reason: ZoneErrorReason;
     constructor(reason: ZoneErrorReason) {
         const messages: Record<ZoneErrorReason, string> = {
-            invalid: "El código postal tiene que tener 5 números. Por ejemplo: 41300.",
+            invalid: "Ese código postal no existe. Tiene que tener 5 números, por ejemplo: 41300.",
             "no-service": "Mercadona no reparte por internet en ese código postal. Verás los precios generales.",
             busy: "Mercadona está muy ocupado ahora mismo. Inténtalo otra vez en un minuto.",
             connection: "No se ha podido comprobar el código postal. Revisa la conexión e inténtalo otra vez.",
@@ -94,7 +96,8 @@ export class ZoneError extends Error {
 // Pregunta a Mercadona (a través del proxy) qué almacén corresponde a un código postal y lo guarda
 export async function resolvePostalCode(input: string): Promise<Zone> {
     const postalCode = input.replace(/\D/g, "");
-    if (!/^\d{5}$/.test(postalCode)) throw new ZoneError("invalid");
+    // Las dos primeras cifras son la provincia (01 a 52): lo demás no existe y no se pregunta a nadie
+    if (!/^(0[1-9]|[1-4]\d|5[0-2])\d{3}$/.test(postalCode)) throw new ZoneError("invalid");
     let response: Response;
     try {
         response = await fetch(`${API_BASE}?${new URLSearchParams({ path: "zone", pc: postalCode }).toString()}`, {
@@ -105,7 +108,7 @@ export async function resolvePostalCode(input: string): Promise<Zone> {
     }
     if (response.status === 400) throw new ZoneError("invalid");
     if (response.status === 404) throw new ZoneError("no-service");
-    if (response.status === 429) throw new ZoneError("busy");
+    if (response.status === 429 || response.status === 503) throw new ZoneError("busy");
     if (!response.ok) throw new ZoneError("connection");
     let wh = "";
     try {
@@ -114,8 +117,6 @@ export async function resolvePostalCode(input: string): Promise<Zone> {
         throw new ZoneError("connection");
     }
     if (!/^[a-z0-9]{2,10}$/.test(wh)) throw new ZoneError("no-service");
-    // Mercadona ha respondido: si había pausa por un rechazo anterior, se levanta (la zona nueva carga entera)
-    clearPause();
     const zone = { postalCode, wh };
     saveZone(zone);
     setWarehouse(wh);
@@ -150,12 +151,13 @@ function currentPosition(): Promise<GeolocationPosition> {
         }
         navigator.geolocation.getCurrentPosition(resolve, error => {
             reject(new LocationError(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable"));
-        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5 * 60 * 1000 });
+        // Sin alta precisión: para el código postal basta la ubicación aproximada (no hace falta el GPS)
+        }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 5 * 60 * 1000 });
     });
 }
 
 // Pide la ubicación (con permiso del usuario) y la convierte en código postal con OpenStreetMap, vía el proxy.
-// La ubicación no se guarda en ningún sitio.
+// La app no guarda la ubicación (viaja redondeada a unos 100 m solo para pedir el código postal).
 export async function postalCodeFromLocation(): Promise<string> {
     const position = await currentPosition();
     const params = new URLSearchParams({
@@ -248,10 +250,14 @@ function clearPause() {
     }
 }
 
-// Solo los fallos de Mercadona (rechazo, demasiadas peticiones, caída). Un 404 es "no existe";
-// sin conexión no le llega nada a Mercadona y al recuperarla conviene renovar enseguida.
+// Solo cuando Mercadona rechaza (401/403/429) o está caída o inalcanzable (502/503/504, que también es lo que
+// devuelve el proxy si Mercadona responde con una página anti-bots en vez de datos). No por un 500 suelto de un
+// pasillo (si no, un pasillo roto pararía el buscador entero), ni por 404 ("no existe"), ni sin conexión (no le
+// llega nada a Mercadona y al recuperarla conviene renovar enseguida).
+const PAUSE_STATUSES = new Set([401, 403, 429, 502, 503, 504]);
+
 function pauseAfter(error: unknown) {
-    if (!(error instanceof MercadonaError) || error.origin !== "mercadona" || error.status === 404 || error.status === 400) return;
+    if (!(error instanceof MercadonaError) || error.origin !== "mercadona" || !PAUSE_STATUSES.has(error.status)) return;
     try {
         localStorage.setItem(PAUSE_KEY, String(Date.now() + PAUSE_MS));
     } catch {
@@ -484,13 +490,17 @@ async function requestJson(url: string): Promise<Fetched> {
     }
     if (!response.ok) {
         let fromProxy = response.headers.get("x-listtype-proxy") === "1";
+        let status = response.status;
         try {
-            const body = await response.json();
-            if (body && typeof body === "object" && (body as { source?: string }).source === "proxy") fromProxy = true;
+            const body = await response.json() as { source?: string, error?: string, upstreamStatus?: number };
+            if (body && typeof body === "object" && body.source === "proxy") fromProxy = true;
+            // El proxy devuelve los rechazos de Mercadona como 503 (para que el CDN siga dando la copia buena);
+            // el código real (401/403/429) viene en upstreamStatus
+            if (body?.error === "upstream_refused" && typeof body.upstreamStatus === "number") status = body.upstreamStatus;
         } catch {
             // cuerpo no JSON: lo ha respondido Vercel, no la función
         }
-        const error = new MercadonaError(response.status, fromProxy ? "mercadona" : "vercel");
+        const error = new MercadonaError(status, fromProxy ? "mercadona" : "vercel");
         pauseAfter(error);
         throw error;
     }
@@ -502,9 +512,11 @@ async function requestJson(url: string): Promise<Fetched> {
         pauseAfter(error);
         throw error;
     }
-    // Mercadona ha respondido bien: si había pausa por un rechazo anterior, se levanta
-    clearPause();
-    return { data, fetchedAt: contentTime(response) };
+    const fetchedAt = contentTime(response);
+    // Solo un dato recién sacado de Mercadona demuestra que ya responde: una copia del CDN de hace horas
+    // llega con 200 aunque Mercadona siga rechazando, y no debe levantar la pausa
+    if (Date.now() - fetchedAt < FRESH_FROM_MERCADONA_MS) clearPause();
+    return { data, fetchedAt };
 }
 
 // Hora a la que el proxy sacó el dato de Mercadona (viaja con la copia del CDN). Sin ella (en local)
@@ -561,21 +573,24 @@ export async function fetchAisle(wh: string, aisleId: number, aisleName: string,
     }
 }
 
-// Edad del precio más reciente de los pasillos de esta zona: cuándo lo sacó el proxy de Mercadona
-// (o, en entradas antiguas, cuándo lo guardó el móvil). Se lee solo el principio de cada entrada.
-export function pricesFetchedAt(wh: string): number | null {
+// Edad de los precios de los pasillos de esta zona: cuándo los sacó el proxy de Mercadona
+// (o, en entradas antiguas, cuándo los guardó el móvil). Se lee solo el principio de cada entrada.
+export function pricesFetchedAt(wh: string, aisleIds?: Set<number>): number | null {
+    // El MÁS ANTIGUO de los pasillos guardados que siguen en el catálogo: si Mercadona deja renovar
+    // unos pocos y rechaza el resto, el aviso no debe desaparecer por esos pocos.
     const prefix = `${CACHE_PREFIX}${wh}:cat:`;
-    let newest: number | null = null;
+    let oldest: number | null = null;
     for (const key of cacheKeys()) {
         if (!key.startsWith(prefix)) continue;
+        if (aisleIds && aisleIds.size > 0 && !aisleIds.has(Number(key.slice(prefix.length)))) continue;
         try {
             const match = (localStorage.getItem(key) || "").slice(0, 60).match(/^\{"savedAt":(\d+)(?:,"fetchedAt":(\d+))?/);
-            if (match) newest = Math.max(newest ?? 0, Number(match[2] ?? match[1]));
+            if (match) oldest = Math.min(oldest ?? Infinity, Number(match[2] ?? match[1]));
         } catch {
             // entrada ilegible: se ignora
         }
     }
-    return newest;
+    return oldest;
 }
 
 function isAisleCached(wh: string, aisleId: number): boolean {
@@ -602,31 +617,54 @@ export async function refreshStaleAisles(
     for (const aisle of staleAisles(wh, groups)) {
         if (isCancelled() || isMercadonaPaused()) break;
         try {
-            onAisle(await downloadAisle(wh, aisle.id, aisle.name));
+            const products = await downloadAisle(wh, aisle.id, aisle.name);
+            // Si mientras tanto se cambió de zona, estos productos ya no son de la zona actual
+            if (isCancelled()) break;
+            onAisle(products);
             refreshed++;
         } catch (error) {
-            // Solo se sigue si ese pasillo concreto ya no existe (404). Cualquier otro fallo (sin conexión,
-            // Mercadona ocupado o rechazando con 401/403/5xx) para la ronda: insistir con el resto de
-            // pasillos solo sumaría peticiones rechazadas. Se volverá a intentar más tarde.
-            if (!(error instanceof MercadonaError && error.status === 404)) break;
+            // Ese pasillo ya no existe: se borra su copia (si no, se quedaría para siempre como "precio antiguo")
+            if (error instanceof MercadonaError && error.status === 404) {
+                dropAisle(wh, aisle.id);
+            } else {
+                // Cualquier otro fallo (sin conexión, Mercadona ocupado o rechazando) para la ronda:
+                // insistir con el resto de pasillos solo sumaría peticiones rechazadas.
+                break;
+            }
         }
         await wait(400);
     }
     return refreshed;
 }
 
+function dropAisle(wh: string, aisleId: number) {
+    try {
+        localStorage.removeItem(`${CACHE_PREFIX}${wh}:cat:${aisleId}`);
+    } catch {
+        // nada que hacer
+    }
+}
+
+// Mercadona nos está rechazando o pide calma: no tiene sentido seguir con más pasillos
+const isRefusal = (error: unknown) =>
+    error instanceof MercadonaError && error.origin === "mercadona" && (error.status === 401 || error.status === 403 || error.status === 429);
+
 const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
 
 export type IndexProgress = { done: number, total: number, failed: number };
 
-// Carga todos los pasillos que falten en caché para que el buscador encuentre cualquier producto.
-// De dos en dos y con pausa entre peticiones; reintenta una vez los 429/5xx y para tras 3 fallos seguidos.
+// Carga todos los pasillos que falten (o estén caducados) para que el buscador encuentre cualquier producto.
+// De dos en dos y con pausa entre peticiones. Cuenta como fallo todo lo que no se pudo descargar de verdad
+// (aunque se enseñe la copia antigua). Para en seco si hay pausa tras un rechazo, si Mercadona rechaza
+// (401/403/429, sin reintentar) o tras 3 fallos seguidos; solo reintenta una vez los fallos pasajeros (5xx, red).
 export async function indexAllAisles(
     wh: string,
     groups: MercadonaGroup[],
     onAisle: (products: MercadonaProduct[]) => void,
     onProgress: (progress: IndexProgress) => void,
-    isCancelled: () => boolean
+    isCancelled: () => boolean,
+    // "Reintentar" pulsado a mano: se intenta aunque haya pausa (al primer rechazo se vuelve a parar)
+    ignorePause = false
 ): Promise<IndexProgress> {
     const aisles = groups.flatMap(group => group.aisles);
     const pending = aisles.filter(aisle => !isAisleCached(wh, aisle.id));
@@ -635,36 +673,59 @@ export async function indexAllAisles(
 
     let next = 0;
     let consecutiveFailures = 0;
+    let refused = false;
+    const paused = () => !ignorePause && isMercadonaPaused();
+    const shouldStop = () => isCancelled() || refused || consecutiveFailures >= 3 || paused();
 
-    const worker = async () => {
-        while (next < pending.length && consecutiveFailures < 3 && !isCancelled()) {
-            const aisle = pending[next++];
-            let products: MercadonaProduct[] | null = null;
-            for (let attempt = 0; attempt < 2 && products === null && !isCancelled(); attempt++) {
-                try {
-                    products = await fetchAisle(wh, aisle.id, aisle.name);
-                } catch (error) {
-                    const retryable = error instanceof MercadonaError
-                        && (error.status === 429 || error.status === 0 || error.status >= 500);
-                    if (attempt === 0 && retryable) await wait(3000);
-                    else break;
+    // Una vuelta: descarga el siguiente pasillo pendiente
+    const step = async () => {
+        const aisle = pending[next++];
+        let products: MercadonaProduct[] | null = null;
+        let gone = false;
+        for (let attempt = 0; attempt < 2 && products === null && !isCancelled(); attempt++) {
+            try {
+                products = await downloadAisle(wh, aisle.id, aisle.name);
+            } catch (error) {
+                if (isRefusal(error)) {
+                    refused = true;
+                    break;
                 }
+                if (error instanceof MercadonaError && error.status === 404) {
+                    gone = true;
+                    dropAisle(wh, aisle.id);
+                    break;
+                }
+                const transient = error instanceof MercadonaError && (error.status === 0 || error.status >= 500);
+                if (attempt === 0 && transient && !paused()) await wait(3000);
+                else break;
             }
-            if (isCancelled()) return;
-            if (products) {
-                consecutiveFailures = 0;
-                onAisle(products);
-            } else {
-                consecutiveFailures++;
-                progress.failed++;
-            }
-            progress.done++;
-            onProgress({ ...progress });
-            await wait(250);
         }
+        if (isCancelled()) return;
+        if (products) {
+            consecutiveFailures = 0;
+            onAisle(products);
+        } else if (!gone) {
+            consecutiveFailures++;
+            progress.failed++;
+            // Para el buscador vale la copia antigua, pero cuenta como fallo: el aviso "faltan pasillos" sale
+            const stale = readCacheEntry<MercadonaProduct[]>(`${CACHE_PREFIX}${wh}:cat:${aisle.id}`, true);
+            if (stale) onAisle(stamp(stale.data, contentAge(stale)));
+        }
+        progress.done++;
+        onProgress({ ...progress });
+        await wait(250);
+    };
+    const worker = async () => {
+        while (next < pending.length && !shouldStop()) await step();
     };
 
-    await Promise.all([worker(), worker()]);
+    // Primero un pasillo solo, como prueba: si Mercadona rechaza, sale una única petición.
+    // Si no hay rechazo (aunque ese pasillo falle por otra cosa), el resto de dos en dos.
+    if (next < pending.length && !shouldStop()) await step();
+    if (!shouldStop()) await Promise.all([worker(), worker()]);
+    // Lo que no se llegó a intentar por parar antes también falta
+    progress.failed += pending.length - Math.min(next, pending.length);
+    progress.done = Math.min(progress.total, progress.done + (pending.length - Math.min(next, pending.length)));
     return { ...progress };
 }
 
@@ -763,6 +824,8 @@ export type ProductDetail = {
     allergens: string,
     storage: string,
     usage: string,
+    // Cuándo se sacó de Mercadona (para avisar si la ficha es antigua)
+    fetchedAt?: number,
 };
 
 // Quita etiquetas HTML y espacios sobrantes de los textos de la ficha
@@ -815,7 +878,11 @@ const SAFE_ID = /^\d{1,8}(\.\d{1,3})?$/;
 // Ficha completa de un producto: solo se pide cuando alguien la abre
 export async function fetchProductDetail(wh: string, mercadonaId: string): Promise<ProductDetail> {
     if (!SAFE_ID.test(mercadonaId)) throw new MercadonaError(400);
-    return cachedJson(`${CACHE_PREFIX}${wh}:detail:${mercadonaId}`, async () => parseDetail(await getJson(`products/${mercadonaId}/`, wh), mercadonaId));
+    const entry = await cachedEntry(`${CACHE_PREFIX}${wh}:detail:${mercadonaId}`, async () => {
+        const { data, fetchedAt } = await getJsonWithTime(`products/${mercadonaId}/`, wh);
+        return { data: parseDetail(data, mercadonaId), fetchedAt };
+    });
+    return { ...entry.data, fetchedAt: contentAge(entry) };
 }
 
 // Productos parecidos según Mercadona (para sugerir alternativas más baratas)

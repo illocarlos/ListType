@@ -204,3 +204,56 @@ Revisión de seguridad y fallos de todo el código. Se aplican los cuatro de pri
 - **Peticiones duplicadas**: al abrir, dos partes pedían las rebajas a la vez; ahora sale una sola petición (las iguales en curso se comparten).
 - Comprobado contra datos reales: ningún id con cero delante (las reglas estrictas del proxy no rompen nada), 69 ids con decimal (admitidos), todas las fotos de prod-mercadona.imgix.net (la CSP no bloquea ninguna). El aviso de precios antiguos cuesta 0,2 ms por lectura.
 - Pruebas: 8/8 edad real + 12/12 rebajas + 13/13 frescura y pausa + 276 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · Foto del PDF al doble, rebajas cada 24 h y revisión independiente
+
+Publicado de una vez: lo pedido por el usuario más los arreglos de una revisión hecha por un agente aparte que no había visto el código mientras se escribía.
+
+Lo pedido:
+- **Foto del producto en el PDF al doble**: 28 mm, preparada a 240 px para que no salga borrosa. Efecto secundario: caben 6 productos por página (antes 11), así que una lista larga ocupa más páginas.
+- **Rebajas y novedades cada 24 h** en el móvil (antes 12 h). Sigue mandando el precio más reciente entre rebaja y pasillo, por la edad real del contenido.
+
+Arreglos de la revisión:
+- **El buscador ya no insiste a Mercadona durante la pausa**. Antes la carga de pasillos para el buscador no miraba la pausa de 30 min. Ahora:
+  - Se prueba primero un solo pasillo; si va bien, el resto se carga de dos en dos.
+  - La carga para ante un rechazo, durante la pausa o tras 3 fallos seguidos.
+  - "Reintentar" a mano sí lo intenta, y se vuelve a parar al primer rechazo.
+  - Si se usa una copia antigua de un pasillo, cuenta como pasillo que falta, para que salga el aviso.
+- **Rechazos de Mercadona protegidos por el CDN**:
+  - El proxy devuelve 401/403/429 como 503 `upstream_refused`, con el código real en `upstreamStatus` y `Retry-After: 1800`.
+  - El motivo: RFC 5861 define el error de `stale-if-error` como 500/502/503/504. La documentación de Vercel solo pone ejemplos (500, fallo de red, DNS) y no dice si un 403 cuenta. Con un 5xx, el CDN sigue sirviendo la última copia buena.
+- **Respuestas negativas guardadas en el CDN**:
+  - "Sin reparto" en un código postal, fuera de España o sin código postal: 1 día.
+  - Producto inexistente en tu zona: 10 min, igual que antes.
+  - Si Mercadona falla (5xx) al buscar la zona, ahora es un 502 sin caché; antes se decía, por error, "no hay reparto".
+- **La pausa solo se levanta con datos recién sacados de Mercadona** (menos de 2 min). Antes se levantaba también con una copia del CDN y al aceptar un código postal. Un 500 suelto ya no activa la pausa: solo los rechazos y 502/503/504.
+- **Aviso de precios antiguos**: usa el pasillo más viejo de los actuales. Antes usaba el más reciente, y el aviso podía no salir.
+- **Carreras**:
+  - Abrir un pasillo y luego otro ya no enseña los productos del primero bajo el título del segundo.
+  - Al cambiar de zona se descartan las rebajas que lleguen tarde de la zona anterior.
+- **Modo sin conexión**:
+  - Ya no se guarda una página de error como copia.
+  - Al instalar y con cada versión nueva se guardan JS, CSS, fuentes woff2 y la librería del PDF, y se borran los archivos de versiones anteriores.
+  - `/assets/` va con `immutable`.
+- **Lector de pantalla y teclado**:
+  - Se anuncia al añadir y al quitar.
+  - El foco no se pierde al quitar con la papelera, al quitar un favorito, al abrir o cerrar un pasillo ni al cambiar de zona.
+- **Parecidos más baratos**: solo del mismo modo de venta. Ya no se mezcla granel con unidad, y el granel lleva "/kg".
+- **Ficha antigua**: si la ficha viene de una copia de más de 48 h, se dice ("Esta ficha es del …").
+- **Proxy de fotos cerrado a lo que usa la app**:
+  - Solo `/images/…` de prod-mercadona.imgix.net, con `fit` y `w`/`h` hasta 900. Comprobado con las 5.269 fotos reales: todas cumplen.
+  - No sigue redirecciones, solo admite formatos de foto y mira el tamaño antes de descargar.
+  - Lleva `nosniff`.
+- **Historial de precios por zona**: solo se apuntan precios confirmados en el catálogo de la zona actual. Al cambiar de código postal, el precio de la otra zona ya no cuenta como subida o bajada.
+- **Código postal**: se valida la provincia (01–52) en la app y en el proxy.
+- **Ubicación**: precisión normal en vez de alta. Basta con el código postal, gasta menos batería y es más rápida.
+- **Nombre del producto**: el área para tocarlo sube de 22 a 36 px de alto (cumple WCAG 2.2 AA, 24 px) con un pseudo-elemento que ocupa el margen de la tarjeta, sin cambiar la altura de la fila (111 px de media, como antes). La revisión proponía 44 px, pero con relleno real la fila crecía a ~131 px y deshacía la fila compacta. Comprobado en 320 y 390 px que no roba toques al +, al corazón ni a otra fila, y que no se sale de su tarjeta.
+
+Pendiente o sabido:
+- No hay lista de almacenes permitidos en el proxy.
+- La miniatura no hace nada al tocarla.
+- En Safari sin instalar, la app puede borrar los datos tras 7 días sin uso (ITP).
+- Las coordenadas aparecen en los registros de Vercel.
+- La regla de límite de peticiones en Vercel la tiene que aprobar el dueño.
+
+Pruebas: 322 de regresión (e2e3–e2e23, incluidas sin conexión, política de seguridad y PDF) + 49 del proxy y del proxy de fotos; auditoría axe con 0 problemas (la única zona táctil por debajo de 44 px es el nombre, a 36 px). `tsc` y `eslint` limpios.

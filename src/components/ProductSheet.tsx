@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, Info, Plus, RefreshCw } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
-import { fetchProductDetail, fetchSimilars, largeImageUrl, mercadonaDetail, MercadonaError, toListItem } from "../helpers/mercadona";
+import { fetchProductDetail, fetchSimilars, largeImageUrl, mercadonaDetail, MercadonaError, STALE_WARNING_MS, toListItem } from "../helpers/mercadona";
 import type { ProductDetail } from "../helpers/mercadona";
 import type { PricePoint } from "../hooks/usePriceHistory";
 import type { listItem, MercadonaProduct } from "../types/types";
@@ -76,6 +76,8 @@ const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onT
             .then(products => {
                 if (cancelled) return;
                 setCheaper(products
+                    // Solo se compara lo comparable: precio por kilo (granel) con precio por kilo, envase con envase
+                    .filter(product => Boolean(product.byWeight) === Boolean(item.byWeight))
                     .filter(product => product.price > 0 && item.price > 0 && product.price < item.price - 0.005)
                     .sort((a, b) => a.price - b.price)
                     .slice(0, 3));
@@ -87,7 +89,7 @@ const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onT
         return () => {
             cancelled = true;
         };
-    }, [wh, id, item.price, attempt]);
+    }, [wh, id, item.price, item.byWeight, attempt]);
 
     // Datos frescos de la ficha si los hay; si no, lo que ya teníamos del producto
     const current: listItem = detail?.product ? { ...toListItem(detail.product), isNew: item.isNew || detail.product.isNew } : item;
@@ -150,6 +152,12 @@ const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onT
 
             {detailState === "ready" && detail && (
                 <>
+                    {detail.fetchedAt !== undefined && Date.now() - detail.fetchedAt > STALE_WARNING_MS && (
+                        <p className="rounded-md bg-highlight p-3 text-base text-on-highlight">
+                            Esta ficha es del {new Date(detail.fetchedAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}: el precio
+                            o los datos pueden haber cambiado. La app la actualizará cuando Mercadona responda.
+                        </p>
+                    )}
                     <section aria-labelledby="ficha-alergenos">
                         <h3 id="ficha-alergenos" className="text-lg font-bold">Alérgenos</h3>
                         {detail.allergens ? (
@@ -218,7 +226,7 @@ const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onT
                                                 <button
                                                     type="button"
                                                     onClick={() => onOpenSimilar(alternative)}
-                                                    className="inline text-left font-semibold leading-snug break-words hover:underline underline-offset-2 rounded-sm"
+                                                    className="relative inline text-left font-semibold leading-snug break-words hover:underline underline-offset-2 rounded-sm before:absolute before:inset-x-0 before:-top-3 before:-bottom-0.5 before:content-['']"
                                                 >
                                                     <span className="sr-only">Ficha de </span>
                                                     {product.name}
@@ -228,7 +236,7 @@ const ProductSheet = ({ wh, item, quantityOf, onAdd, onDecrease, isFavorite, onT
                                         </p>
                                         <p className="text-sm text-muted break-words">{mercadonaDetail(product)}</p>
                                         <p className="mt-1 text-base tabular">
-                                            <span className="font-bold">{formatCurrency(product.price)}</span>
+                                            <span className="font-bold">{formatCurrency(product.price)}{product.byWeight && <span className="text-sm font-semibold"> /kg</span>}</span>
                                             <span className="ml-2 text-sm font-semibold text-accent-strong">{formatCurrency(saving)} menos</span>
                                         </p>
                                     </div>

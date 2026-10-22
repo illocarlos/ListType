@@ -18,7 +18,8 @@ const UPSTREAM = 'https://tienda.mercadona.es/api/';
 // sería otra entrada en la caché del CDN y otra petición a Mercadona.
 const PATH_RE = /^(categories\/([1-9]\d{0,5}\/)?|home\/(new-arrivals|price-drops)\/|products\/[1-9]\d{0,7}(\.\d{1,3})?\/(similars\/)?)$/;
 const WH_RE = /^[a-z0-9]{2,10}$/;
-const PC_RE = /^\d{5}$/;
+// Códigos postales españoles: las dos primeras cifras son la provincia (01 a 52)
+const PC_RE = /^(0[1-9]|[1-4]\d|5[0-2])\d{3}$/;
 // Coordenadas ya redondeadas a 3 decimales por la app (unos 100 m)
 const COORD_RE = /^-?\d{1,3}\.\d{3}$/;
 const TIMEOUT_MS = 8000;
@@ -49,10 +50,11 @@ async function resolveZone(res, pc) {
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });
         const wh = (upstream.headers.get('x-customer-wh') || '').trim().toLowerCase();
-        if (upstream.status === 429) return sendError(res, 429, 'upstream_error', { upstreamStatus: 429 });
+        if (isRefusalStatus(upstream.status)) return sendRefusal(res, upstream.status, 'zone');
+        if (upstream.status >= 500) return sendError(res, 502, 'upstream_error', { upstreamStatus: upstream.status });
         if (!upstream.ok || !WH_RE.test(wh)) {
-            // Código postal sin reparto online o respuesta sin almacén
-            return sendError(res, 404, 'no_warehouse', { pc, upstreamStatus: upstream.status });
+            // Código postal sin reparto online: no cambia de un día para otro, se guarda 1 día para no repetir la pregunta
+            return sendError(res, 404, 'no_warehouse', { pc, upstreamStatus: upstream.status }, 86400);
         }
         res.setHeader('x-listtype-proxy', '1');
         // La relación código postal -> almacén cambia muy poco: 30 días en el CDN
@@ -95,7 +97,7 @@ async function resolvePostcodeFromLocation(res, latRaw, lonRaw) {
     }
     // España peninsular, Baleares, Canarias, Ceuta y Melilla (caja amplia)
     const inSpain = lat >= 27.4 && lat <= 44.0 && lon >= -18.4 && lon <= 4.5;
-    if (!inSpain) return sendError(res, 404, 'outside_spain');
+    if (!inSpain) return sendError(res, 404, 'outside_spain', {}, 86400);
 
     const url = new URL(NOMINATIM);
     url.searchParams.set('format', 'jsonv2');
@@ -109,11 +111,11 @@ async function resolvePostcodeFromLocation(res, latRaw, lonRaw) {
             headers: { Accept: 'application/json', 'User-Agent': APP_ID, Referer: 'https://anita-y-su-comprita.vercel.app/' },
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });
-        if (upstream.status === 429) return sendError(res, 429, 'upstream_error', { upstreamStatus: 429 });
+        if (isRefusalStatus(upstream.status)) return sendRefusal(res, upstream.status, 'geo');
         if (!upstream.ok) return sendError(res, 502, 'upstream_error', { upstreamStatus: upstream.status });
         const data = await upstream.json();
         const match = String(data?.address?.postcode ?? '').match(/\d{5}/);
-        if (!match) return sendError(res, 404, 'no_postcode');
+        if (!match) return sendError(res, 404, 'no_postcode', {}, 86400);
         res.setHeader('x-listtype-proxy', '1');
         res.setHeader('Cache-Control', 'public, s-maxage=2592000, stale-while-revalidate=604800');
         return res.status(200).json({ source: 'proxy', pc: match[0], attribution: '© OpenStreetMap contributors' });
@@ -169,6 +171,20 @@ function sendError(res, status, error, extra = {}, cacheSeconds = 0) {
     res.setHeader('Cache-Control', cacheSeconds > 0 ? `public, s-maxage=${cacheSeconds}` : 'no-store');
     res.setHeader('x-listtype-proxy', '1');
     return res.status(status).json({ source: 'proxy', error, ...extra });
+}
+
+// Mercadona (o OpenStreetMap) nos rechaza o pide calma
+function isRefusalStatus(status) {
+    return status === 401 || status === 403 || status === 429;
+}
+
+// Un rechazo se devuelve como 503 (con el código real en upstreamStatus): con un 5xx el CDN aplica
+// stale-if-error y sigue sirviendo la última copia buena a todos en vez de pasar cada petición a Mercadona.
+// Con 401/403/429 tal cual, el CDN no lo considera error del servidor y no protege nada.
+function sendRefusal(res, upstreamStatus, where) {
+    console.warn(`[MERCADONA_RECHAZO] status=${upstreamStatus} path=${where}`);
+    res.setHeader('Retry-After', '1800');
+    return sendError(res, 503, 'upstream_refused', { upstreamStatus });
 }
 
 // Un único valor de texto por parámetro (?wh=a&wh=b llega como lista y se rechaza)
@@ -230,7 +246,8 @@ export default async function handler(req, res) {
         const upstream = await fetchUpstream(buildUrl(path, wh));
 
         if (!upstream.ok) {
-            logRefusal(upstream.status, path);
+            // sendRefusal ya deja la marca [MERCADONA_RECHAZO] en los registros
+            if (isRefusalStatus(upstream.status)) return sendRefusal(res, upstream.status, path);
             // "No existe en tu zona" no cambia de un minuto a otro: se guarda 10 min para no repetir la pregunta
             return sendError(res, upstream.status, 'upstream_error', { upstreamStatus: upstream.status }, upstream.status === 404 ? 600 : 0);
         }

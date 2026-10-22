@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import { Info, Minus, Plus, Trash2 } from "lucide-react"
 import { formatCurrency } from "../helpers/formatPrice"
 import type { listItem, orderItem } from "../types/types"
@@ -12,21 +13,42 @@ type ListOrderProps = {
 }
 
 const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails }: ListOrderProps) => {
+    // Al quitar un producto con la papelera su fila desaparece: el foco pasa a la papelera del siguiente
+    // (o del anterior), o al aviso de lista vacía, para que el teclado y el lector de pantalla no se pierdan
+    const listRef = useRef<HTMLUListElement>(null)
+    const emptyRef = useRef<HTMLParagraphElement>(null)
+    const pendingFocus = useRef<number | "empty" | null>(null)
+    useEffect(() => {
+        const target = pendingFocus.current
+        pendingFocus.current = null
+        if (target === "empty") emptyRef.current?.focus()
+        else if (target !== null) listRef.current?.querySelector<HTMLButtonElement>(`[data-row-id="${target}"] [data-trash]`)?.focus()
+    }, [order.length])
+
+    const remove = (item: orderItem, button: HTMLButtonElement) => {
+        if (document.activeElement === button) {
+            const index = order.findIndex(entry => entry.id === item.id)
+            const next = order[index + 1] ?? order[index - 1]
+            pendingFocus.current = next ? next.id : "empty"
+        }
+        removeItem(item.id)
+    }
+
     if (order.length === 0) {
         return (
             <div className="px-4 py-10 text-center">
-                <p className="text-lg font-semibold">Tu lista está vacía</p>
-                <p className="text-base text-muted mt-1">Busca un producto arriba y pulsa «Añadir» para apuntarlo.</p>
+                <p ref={emptyRef} tabIndex={-1} className="text-lg font-semibold focus:outline-none">Tu lista está vacía</p>
+                <p className="text-base text-muted mt-1">Busca un producto arriba y pulsa el botón + para apuntarlo.</p>
             </div>
         )
     }
 
     return (
-        <ul className="divide-y divide-border">
+        <ul ref={listRef} className="divide-y divide-border">
             {order.map(item => {
                 const detail = [item.packaging, item.unitPrice].filter(Boolean).join(" · ")
                 return (
-                    <li key={item.id} className="flex gap-3 px-4 py-3">
+                    <li key={item.id} data-row-id={item.id} className="flex gap-3 px-4 py-3">
                         <Thumb item={item} size="sm" />
 
                         <div className="min-w-0 flex-1">
@@ -34,7 +56,8 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails }: 
                                 <p className="flex-1 font-semibold leading-snug break-words">{item.name}</p>
                                 <button
                                     type="button"
-                                    onClick={() => removeItem(item.id)}
+                                    data-trash
+                                    onClick={event => remove(item, event.currentTarget)}
                                     aria-label={`Quitar ${item.name} de la lista`}
                                     className="flex-none -mt-2 -mr-2 h-11 w-11 grid place-items-center rounded-full text-danger hover:bg-danger hover:text-on-danger"
                                 >
@@ -67,7 +90,9 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails }: 
                                         <Plus size={20} aria-hidden="true" />
                                     </button>
                                 </div>
-                                <span className="text-base text-muted tabular">total{item.byWeight ? " aprox." : ""}: {formatCurrency(item.price * item.quantity)}</span>
+                                {item.price > 0 && (
+                                    <span className="text-base text-muted tabular">total{item.byWeight ? " aprox." : ""}: {formatCurrency(item.price * item.quantity)}</span>
+                                )}
                                 {onOpenDetails && item.mercadonaId && (
                                     <button
                                         type="button"
