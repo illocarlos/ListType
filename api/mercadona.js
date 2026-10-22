@@ -5,18 +5,33 @@
 //
 // Uso: /api/mercadona?path=categories/&lang=es&wh=svq1
 //      /api/mercadona?path=categories/112/&lang=es&wh=svq1
-//      /api/mercadona?path=home/price-drops/  ·  home/new-arrivals/  ·  products/10380/  ·  products/10380/similars/
+//      /api/mercadona?path=home/price-drops/&lang=es&wh=svq1  ·  home/new-arrivals/  ·  products/10380/  ·  products/10380/similars/
 //      /api/mercadona?path=ping   -> comprueba que la función está desplegada (no llama a Mercadona)
 //      /api/mercadona?path=zone&pc=41300 -> almacén de un código postal: { wh: 'svq1', pc: '41300' }
-//      /api/mercadona?path=geo&lat=37.48&lon=-5.98 -> código postal de una ubicación (OpenStreetMap)
+//      /api/mercadona?path=geo&lat=37.480&lon=-5.980 -> código postal de una ubicación (OpenStreetMap)
 //      /api/mercadona?path=status -> 200 si Mercadona responde, 503 si rechaza (para un vigilante externo)
+// El catálogo exige almacén (wh). Cualquier parámetro que no sea de la ruta se rechaza con 400.
 
 const UPSTREAM = 'https://tienda.mercadona.es/api/';
-// Solo lectura del catálogo público de la tienda: categorías, rebajas, novedades, ficha y parecidos
-const PATH_RE = /^(categories\/(\d{1,6}\/)?|home\/(new-arrivals|price-drops)\/|products\/\d{1,8}(\.\d{1,3})?\/(similars\/)?)$/;
+// Solo lectura del catálogo público de la tienda: categorías, rebajas, novedades, ficha y parecidos.
+// Formas exactas (sin ceros a la izquierda y con la barra final), como las pide la app: cada variante
+// sería otra entrada en la caché del CDN y otra petición a Mercadona.
+const PATH_RE = /^(categories\/([1-9]\d{0,5}\/)?|home\/(new-arrivals|price-drops)\/|products\/[1-9]\d{0,7}(\.\d{1,3})?\/(similars\/)?)$/;
 const WH_RE = /^[a-z0-9]{2,10}$/;
 const PC_RE = /^\d{5}$/;
+// Coordenadas ya redondeadas a 3 decimales por la app (unos 100 m)
+const COORD_RE = /^-?\d{1,3}\.\d{3}$/;
 const TIMEOUT_MS = 8000;
+
+// Parámetros admitidos en cada ruta. Cualquier otro se rechaza: un parámetro inventado crearía
+// otra entrada en la caché del CDN y la petición llegaría a Mercadona (o a OpenStreetMap) cada vez.
+const ALLOWED_PARAMS = {
+    ping: ['path'],
+    status: ['path'],
+    zone: ['path', 'pc'],
+    geo: ['path', 'lat', 'lon'],
+    catalog: ['path', 'lang', 'wh'],
+};
 
 // Código postal -> almacén. La tienda de Mercadona hace lo mismo: envía el código postal
 // y la respuesta trae el almacén en la cabecera x-customer-wh. No se guarda nada del usuario.
@@ -148,11 +163,22 @@ function isJsonData(body) {
     }
 }
 
-// Errores siempre con source: 'proxy' para que la app distinga un 404 de Mercadona de un 404 de Vercel
-function sendError(res, status, error, extra = {}) {
-    res.setHeader('Cache-Control', 'no-store');
+// Errores siempre con source: 'proxy' para que la app distinga un 404 de Mercadona de un 404 de Vercel.
+// Por defecto no se guardan; cacheSeconds permite guardar un rato los que se repetirían igual (p. ej. 404).
+function sendError(res, status, error, extra = {}, cacheSeconds = 0) {
+    res.setHeader('Cache-Control', cacheSeconds > 0 ? `public, s-maxage=${cacheSeconds}` : 'no-store');
     res.setHeader('x-listtype-proxy', '1');
     return res.status(status).json({ source: 'proxy', error, ...extra });
+}
+
+// Un único valor de texto por parámetro (?wh=a&wh=b llega como lista y se rechaza)
+function single(value) {
+    return typeof value === 'string' ? value : null;
+}
+
+function routeOf(path) {
+    if (path === 'ping' || path === 'status' || path === 'zone' || path === 'geo') return path;
+    return 'catalog';
 }
 
 export default async function handler(req, res) {
@@ -161,53 +187,52 @@ export default async function handler(req, res) {
         return sendError(res, 405, 'method_not_allowed');
     }
 
-    const rawPath = Array.isArray(req.query.path) ? req.query.path.join('/') : String(req.query.path ?? '');
+    const path = single(req.query.path);
+    if (path === null) return sendError(res, 400, 'path_not_allowed');
 
-    if (rawPath === 'ping') {
+    const route = routeOf(path);
+    const unexpected = Object.keys(req.query).filter(key => !ALLOWED_PARAMS[route].includes(key));
+    if (unexpected.length > 0) return sendError(res, 400, 'unexpected_param');
+
+    if (route === 'ping') {
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('x-listtype-proxy', '1');
-        return res.status(200).json({ source: 'proxy', ok: true, node: process.version });
+        return res.status(200).json({ source: 'proxy', ok: true });
     }
 
-    if (rawPath === 'status') {
+    if (route === 'status') {
         return checkStatus(res);
     }
 
-    if (rawPath === 'geo') {
-        return resolvePostcodeFromLocation(res, req.query.lat, req.query.lon);
+    if (route === 'geo') {
+        const lat = single(req.query.lat);
+        const lon = single(req.query.lon);
+        if (!lat || !lon || !COORD_RE.test(lat) || !COORD_RE.test(lon)) return sendError(res, 400, 'invalid_location');
+        return resolvePostcodeFromLocation(res, lat, lon);
     }
 
-    if (rawPath === 'zone') {
-        return resolveZone(res, String(req.query.pc ?? '').trim());
+    if (route === 'zone') {
+        return resolveZone(res, single(req.query.pc) ?? '');
     }
 
-    const path = rawPath.endsWith('/') ? rawPath : `${rawPath}/`;
     if (!PATH_RE.test(path)) {
-        return sendError(res, 400, 'path_not_allowed', { path: rawPath });
+        return sendError(res, 400, 'path_not_allowed');
     }
 
-    const wh = String(req.query.wh ?? '').toLowerCase();
-    const validWh = WH_RE.test(wh) ? wh : '';
+    // Almacén obligatorio y exacto (en minúsculas): nada de reintentos con otro almacén.
+    // Antes, si un producto no existía en tu zona, se pedía el de la zona por defecto y se enseñaba
+    // con el precio de otra zona, guardado 12 h como si fuera el tuyo.
+    const wh = single(req.query.wh);
+    const lang = req.query.lang === undefined ? 'es' : single(req.query.lang);
+    if (!wh || !WH_RE.test(wh) || lang !== 'es') return sendError(res, 400, 'invalid_params');
 
     try {
-        let upstreamUrl = buildUrl(path, validWh);
-        let upstream = await fetchUpstream(upstreamUrl);
-        let fallback = false;
-
-        // Si el almacén pedido no existe, se reintenta una vez con el de por defecto de Mercadona
-        if (validWh && upstream.status >= 400 && upstream.status < 500 && upstream.status !== 429) {
-            upstreamUrl = buildUrl(path, '');
-            upstream = await fetchUpstream(upstreamUrl);
-            fallback = true;
-        }
+        const upstream = await fetchUpstream(buildUrl(path, wh));
 
         if (!upstream.ok) {
             logRefusal(upstream.status, path);
-            return sendError(res, upstream.status, 'upstream_error', {
-                upstreamStatus: upstream.status,
-                upstreamUrl: upstreamUrl.toString(),
-                whFallback: fallback,
-            });
+            // "No existe en tu zona" no cambia de un minuto a otro: se guarda 10 min para no repetir la pregunta
+            return sendError(res, upstream.status, 'upstream_error', { upstreamStatus: upstream.status }, upstream.status === 404 ? 600 : 0);
         }
 
         const body = await upstream.text();
@@ -220,7 +245,6 @@ export default async function handler(req, res) {
         }
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('x-listtype-proxy', '1');
-        if (fallback) res.setHeader('x-wh-fallback', '1');
         // Productos y precios: el CDN de Vercel guarda la copia 12 h y solo puede entregar una copia
         // caducada durante 1 h más mientras busca la nueva. Con la caché de 24 h del móvil, el retraso
         // máximo de un precio queda en día y medio aproximadamente, con la mitad de peticiones que a 6 h.

@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { BadgePercent, Heart, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, Heart, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
 import useFavorites from "./hooks/useFavorites"
@@ -454,6 +454,18 @@ function App() {
       <div className="mx-auto max-w-content px-4 md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-8">
         <main className="pt-4 pb-32 md:pb-12">
           <AppUpdate />
+          {/* Aviso de precios antiguos: solo si tienen más de 48 h y no se han podido renovar */}
+          <div role="status" aria-live="polite">
+            {mercadona.pricesStale && mercadona.pricesUpdatedAt !== null && (
+              <p className="mb-4 flex items-start gap-2 rounded-md bg-highlight p-3 text-base text-on-highlight">
+                <AlertTriangle size={20} aria-hidden="true" className="mt-0.5 flex-none" />
+                <span>
+                  Precios sin actualizar desde el {new Date(mercadona.pricesUpdatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}.
+                  {" "}Puede que alguno haya cambiado; la app lo volverá a intentar sola.
+                </span>
+              </p>
+            )}
+          </div>
           <p role="status" aria-live="polite" className="sr-only">{resultsAnnouncement}</p>
           <p role="status" aria-live="polite" className="sr-only">{manualAdded}</p>
           {searching ? (

@@ -1,6 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
+// Fuente Onest servida desde la propia app (antes venía de Google Fonts, que recibía la IP de cada usuario).
+// Solo el juego latino (español incluido) y los grosores que se usan.
+import '@fontsource/onest/latin-400.css'
+import '@fontsource/onest/latin-500.css'
+import '@fontsource/onest/latin-600.css'
+import '@fontsource/onest/latin-700.css'
+import '@fontsource/onest/latin-800.css'
 import './index.css'
 import { captureInstallPrompt } from './helpers/install'
 
