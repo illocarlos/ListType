@@ -87,7 +87,7 @@ function buildUrl(path, wh) {
 // Las coordenadas se redondean a 3 decimales (unos 100 m): más privacidad y más aciertos de caché.
 // No se guarda nada: la ubicación solo sirve para sacar el código postal.
 const NOMINATIM = 'https://nominatim.openstreetmap.org/reverse';
-const APP_ID = 'ListType/1.0 (+https://anita-y-su-comprita.vercel.app)';
+const APP_ID = 'ListType/1.0 (+https://mercalista.vercel.app)';
 
 async function resolvePostcodeFromLocation(res, latRaw, lonRaw) {
     const lat = Number.parseFloat(String(latRaw ?? ''));
@@ -108,7 +108,7 @@ async function resolvePostcodeFromLocation(res, latRaw, lonRaw) {
     url.searchParams.set('accept-language', 'es');
     try {
         const upstream = await fetch(url, {
-            headers: { Accept: 'application/json', 'User-Agent': APP_ID, Referer: 'https://anita-y-su-comprita.vercel.app/' },
+            headers: { Accept: 'application/json', 'User-Agent': APP_ID, Referer: 'https://mercalista.vercel.app/' },
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });
         if (isRefusalStatus(upstream.status)) return sendRefusal(res, upstream.status, 'geo');

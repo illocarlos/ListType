@@ -270,3 +270,18 @@ Pruebas: 322 de regresión (e2e3–e2e23, incluidas sin conexión, política de 
 - "Volver arriba" queda encima de la barra sin taparla. La barra va dentro de `<nav aria-label="Menú principal">` (axe pedía que todo estuviera en una zona con nombre).
 - Vercel: creada a petición del dueño la regla de cortafuegos "Límite /api por IP" (400 peticiones por minuto por IP a `/api/`). Vercel añadió además sus reglas básicas en modo solo registrar.
 - Pruebas: 22/22 nuevas de la barra + regresión completa (e2e3–e2e23); una prueba de rebajas fallaba 1 de cada 3 veces por una carrera de la propia prueba (contaba peticiones de la carga anterior): ahora espera a que termine antes de empezar a contar, 5/5. Auditoría: 0 problemas axe, ningún texto de menos de 14 px y el foco nunca queda tapado por la barra.
+
+## 2026-10-22 · Dirección nueva: mercalista.vercel.app (con mudanza de datos)
+
+- El dueño pidió cambiar el nombre. `mercacompra.vercel.app` ya era de otra cuenta de Vercel, así que se eligió `mercalista.vercel.app`, gratis. Se añadió al proyecto y sirve la misma app que la vieja; las dos funcionan a la vez.
+- **Problema**: la lista, los favoritos, la zona y el historial se guardan en el navegador por dirección, así que en la nueva la app saldría vacía. Además, en el iPhone la app de la pantalla de inicio no comparte datos con Safari (WebKit 181849, decisión de Apple): aunque el enlace se abra en Safari, la app nueva instalada empieza vacía.
+- **Mudanza** (`src/helpers/move.ts`, `src/components/Move.tsx`):
+  - En la dirección vieja sale el aviso "La app se ha mudado" con el botón "Llevar mis datos a la app nueva".
+  - El botón es un enlace a la nueva con los datos tras la `#` (no llegan a ningún servidor), comprimidos con `deflate-raw`; unos 460 caracteres con una lista normal. Además los copia al portapapeles.
+  - En la nueva, si se llega por el enlace se guardan antes de pintar la app y se quita el código de la dirección.
+  - Si la nueva está vacía (por ejemplo, recién instalada en el iPhone), sale "¿Vienes de la app anterior?" con "Pegar mis datos" y un recuadro para pegar a mano.
+- Lo que llega se comprueba campo a campo y se descarta lo que no encaja. Se une sin pisar: se añaden los productos y favoritos que falten, y la zona de la nueva se queda si ya había una.
+- En la dirección vieja ya no se invita a instalar. El icono nuevo se llama "MercaLista" (`short_name` y título de Apple) para no confundirlo con el viejo ("La compra").
+- El proxy se identifica ante OpenStreetMap con la dirección nueva.
+- Pendiente: cuando Anita se haya mudado, redirigir la dirección vieja a la nueva. No antes, porque una redirección deja atrás los datos sin traer.
+- Pruebas: 25/25 de la mudanza (las dos direcciones simuladas en el navegador, enlace, pegar, código roto, manipulado y unir) + regresión completa.
