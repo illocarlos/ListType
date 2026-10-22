@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { Heart, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
+import { Heart, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
 import useFavorites from "./hooks/useFavorites"
@@ -193,6 +193,29 @@ function App() {
 
   const closeList = useCallback(() => setListOpen(false), []);
 
+  // Plan B: Mercadona no responde (no hay pasillos o la carga se ha parado por errores)
+  const mercadonaDown = mercadona.groupsState === "error"
+    || (mercadona.indexState === "stopped" && mercadona.searchable.length === 0);
+
+  const [manualAdded, setManualAdded] = useState<string>("");
+
+  // Apunta a mano lo escrito en el buscador (mismo formato que los productos a mano de antes)
+  const addManual = () => {
+    const name = deferredQuery.trim().replace(/[.;,]/g, "").toLowerCase();
+    if (name.length < 2) return;
+    const existing = order.find(item => item.source === "manual" && item.name === name);
+    addItem(existing ?? {
+      id: Math.floor(Math.random() * 9000000000) + 1000000000,
+      name,
+      type: "a mano",
+      price: 0,
+      source: "manual",
+    });
+    setManualAdded(`«${name}» añadido a tu lista`);
+    setQuery("");
+    searchRef.current?.focus();
+  };
+
   // Pestañas: flechas izquierda/derecha, Inicio y Fin (patrón estándar de pestañas)
   const handleTabKeys = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const index = HOME_TABS.indexOf(homeTab);
@@ -352,6 +375,7 @@ function App() {
       <div className="mx-auto max-w-content px-4 md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-8">
         <main className="pt-4 pb-32 md:pb-12">
           <p role="status" aria-live="polite" className="sr-only">{resultsAnnouncement}</p>
+          <p role="status" aria-live="polite" className="sr-only">{manualAdded}</p>
           {searching ? (
             <div>
               <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto" role="group" aria-label="Dónde buscar">
@@ -415,7 +439,23 @@ function App() {
                 </section>
               )}
 
-              {noResults && (
+              {/* Plan B: si Mercadona no responde, lo buscado se puede apuntar a mano con un toque */}
+              {mercadonaDown && deferredQuery.trim().length >= 2 && (
+                <div className="mb-4 rounded-md border-2 border-accent bg-surface p-4">
+                  <p className="font-semibold">¿No lo encuentras? Apúntalo a mano</p>
+                  <p className="text-sm text-muted mt-1">Se añade a tu lista sin foto ni precio.</p>
+                  <button
+                    type="button"
+                    onClick={addManual}
+                    className="mt-3 w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent text-on-accent text-base font-semibold hover:bg-accent-strong"
+                  >
+                    <Plus size={20} aria-hidden="true" />
+                    Añadir «{deferredQuery.trim()}» a la lista
+                  </button>
+                </div>
+              )}
+
+              {noResults && !mercadonaDown && (
                 <div className="rounded-md bg-surface p-6 text-center">
                   <p className="font-semibold">
                     {loadingCatalog ? "Buscando…" : `No hay nada que coincida con «${deferredQuery.trim()}».`}

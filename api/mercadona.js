@@ -8,6 +8,7 @@
 //      /api/mercadona?path=ping   -> comprueba que la función está desplegada (no llama a Mercadona)
 //      /api/mercadona?path=zone&pc=41300 -> almacén de un código postal: { wh: 'svq1', pc: '41300' }
 //      /api/mercadona?path=geo&lat=37.48&lon=-5.98 -> código postal de una ubicación (OpenStreetMap)
+//      /api/mercadona?path=status -> 200 si Mercadona responde, 503 si rechaza (para un vigilante externo)
 
 const UPSTREAM = 'https://tienda.mercadona.es/api/';
 const PATH_RE = /^categories\/(\d{1,6}\/)?$/;
@@ -104,6 +105,37 @@ async function resolvePostcodeFromLocation(res, latRaw, lonRaw) {
     }
 }
 
+// Aviso para el dueño de la app: cada rechazo de Mercadona queda en los registros de Vercel
+// con una marca fácil de buscar (Vercel > proyecto > Logs > buscar "MERCADONA_RECHAZO").
+function logRefusal(status, path) {
+    if (status === 403 || status === 401 || status === 429) {
+        console.warn(`[MERCADONA_RECHAZO] status=${status} path=${path}`);
+    }
+}
+
+// Comprobación de estado para vigilar con un servicio gratuito (UptimeRobot o similar):
+// 200 = Mercadona responde; 503 = Mercadona rechaza o no responde. El CDN la guarda 1 h,
+// así que aunque el vigilante pregunte cada 5 minutos, a Mercadona solo le llega 1 petición por hora.
+async function checkStatus(res) {
+    let status = 0;
+    try {
+        const upstream = await fetchUpstream(buildUrl('categories/', ''));
+        status = upstream.status;
+    } catch {
+        status = 0;
+    }
+    const ok = status >= 200 && status < 300;
+    if (!ok) logRefusal(status, 'status');
+    res.setHeader('x-listtype-proxy', '1');
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=300');
+    return res.status(ok ? 200 : 503).json({
+        source: 'proxy',
+        mercadona: ok ? 'ok' : 'rechazo',
+        upstreamStatus: status,
+        checkedAt: new Date().toISOString(),
+    });
+}
+
 // Errores siempre con source: 'proxy' para que la app distinga un 404 de Mercadona de un 404 de Vercel
 function sendError(res, status, error, extra = {}) {
     res.setHeader('Cache-Control', 'no-store');
@@ -123,6 +155,10 @@ export default async function handler(req, res) {
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('x-listtype-proxy', '1');
         return res.status(200).json({ source: 'proxy', ok: true, node: process.version });
+    }
+
+    if (rawPath === 'status') {
+        return checkStatus(res);
     }
 
     if (rawPath === 'geo') {
@@ -154,6 +190,7 @@ export default async function handler(req, res) {
         }
 
         if (!upstream.ok) {
+            logRefusal(upstream.status, path);
             return sendError(res, upstream.status, 'upstream_error', {
                 upstreamStatus: upstream.status,
                 upstreamUrl: upstreamUrl.toString(),
