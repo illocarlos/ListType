@@ -218,7 +218,32 @@ function App() {
   };
 
   const closeList = useCallback(() => setListOpen(false), []);
-  const closeDetail = useCallback(() => setDetailItem(null), []);
+  // Ficha: de un producto se puede pasar a un parecido más barato y volver; se guarda el recorrido
+  const [detailTrail, setDetailTrail] = useState<listItem[]>([]);
+  const [detailNavigated, setDetailNavigated] = useState<boolean>(false);
+  const openDetail = useCallback((item: listItem) => {
+    setDetailTrail([]);
+    setDetailNavigated(false);
+    setDetailItem(item);
+  }, []);
+  const openSimilar = useCallback((item: listItem) => {
+    if (!detailItem || item.mercadonaId === detailItem.mercadonaId) return;
+    setDetailTrail(trail => [...trail, detailItem]);
+    setDetailNavigated(true);
+    setDetailItem(item);
+  }, [detailItem]);
+  const backDetail = useCallback(() => {
+    const previous = detailTrail[detailTrail.length - 1];
+    if (!previous) return;
+    setDetailTrail(trail => trail.slice(0, -1));
+    setDetailNavigated(true);
+    setDetailItem(previous);
+  }, [detailTrail]);
+  const closeDetail = useCallback(() => {
+    setDetailItem(null);
+    setDetailTrail([]);
+    setDetailNavigated(false);
+  }, []);
 
   // Plan B: Mercadona no responde (no hay pasillos o la carga se ha parado por errores)
   const mercadonaDown = mercadona.groupsState === "error"
@@ -281,7 +306,7 @@ function App() {
       favorite
       onToggleFavorite={toggleFavorite}
       note={changeNote(item)}
-      onOpenDetails={setDetailItem}
+      onOpenDetails={openDetail}
     />
   );
 
@@ -299,7 +324,7 @@ function App() {
         onDecrease={decreaseFromResults}
         favorite={isFavorite(item.id)}
         onToggleFavorite={toggleFavorite}
-        onOpenDetails={setDetailItem}
+        onOpenDetails={openDetail}
       />
     );
   };
@@ -373,7 +398,7 @@ function App() {
           addItem={addItem}
           decreaseItem={decreaseItem}
           removeItem={removeItem}
-          onOpenDetails={setDetailItem}
+          onOpenDetails={openDetail}
         />
       </div>
       <div className="border-t border-border p-4 space-y-3 safe-bottom">
@@ -681,7 +706,7 @@ function App() {
                 onDecrease={decreaseFromResults}
                 isFavorite={isFavorite}
                 onToggleFavorite={toggleFavorite}
-                onOpenDetails={setDetailItem}
+                onOpenDetails={openDetail}
                 onProductsLoaded={mercadona.addToPool}
               />
               </div>
@@ -735,6 +760,10 @@ function App() {
             isFavorite={isFavorite}
             onToggleFavorite={toggleFavorite}
             history={historyOf(detailItem.mercadonaId)}
+            onOpenSimilar={openSimilar}
+            backTo={detailTrail[detailTrail.length - 1] ?? null}
+            onBack={backDetail}
+            navigated={detailNavigated}
           />
         )}
       </Sheet>

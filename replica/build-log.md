@@ -163,3 +163,10 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - **C, fila compacta** (`ProductRow.tsx`, en toda la app): precio, envase y + en la misma línea; la ficha se abre tocando el nombre (icono de información, nombre accesible "Ficha de …"). El + es un botón redondo de 44 px con nombre "Añadir … a la lista". Media real en Pollo: 112 px.
 - **E, Volver arriba** (`BackToTop.tsx`): aparece al bajar más de 1,2 pantallas, a la izquierda y encima de la barra "Ver lista" para no tapar los +; sube y deja el foco en el título de la app; respeta "reducir movimiento".
 - Pruebas: 18/18 nuevas con el catálogo real + 193 de regresión (Rebajas adaptada a secciones cerradas); auditoría sin problemas.
+
+## 2026-10-22 · Ficha: abrir los parecidos más baratos
+
+- El usuario esperaba que tocar el nombre de un "parecido y más barato" abriera ese producto (como ya pasa con el nombre en el resto de la app).
+- Ahora el nombre del parecido es un botón ("Ficha de …", con icono de información) que abre su ficha en la misma ventana. Arriba aparece "Volver a «producto anterior»"; se puede encadenar y volver paso a paso. Al cerrar y reabrir se empieza de cero.
+- Al cambiar de producto la ficha sube arriba y el foco pasa a "Volver" (para teclado y lector de pantalla).
+- Pruebas: 13/13 nuevas + 211 de regresión; auditoría sin problemas.
