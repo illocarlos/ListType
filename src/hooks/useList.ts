@@ -70,11 +70,17 @@ export default function useList() {
         });
     }, []);
 
+    // Vaciar la lista de golpe (tras la compra) y deshacerlo: se devuelve lo que había tal cual
+    const clearOrder = useCallback(() => setOrder([]), []);
+    const restoreOrder = useCallback((items: orderItem[]) => setOrder(items), []);
+
     return {
         order,
         addItem,
         decreaseItem,
         removeItem,
-        refreshOrder
+        refreshOrder,
+        clearOrder,
+        restoreOrder
     };
 }

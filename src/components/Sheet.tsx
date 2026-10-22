@@ -13,11 +13,52 @@ type SheetProps = {
 // Diálogos abiertos, el último arriba: solo ese atiende al teclado (p. ej. la ficha abierta desde la lista)
 const openSheets: symbol[] = [];
 
+// Botón "atrás" del móvil (Android, o el gesto de volver en Safari): cada diálogo abierto añade un paso
+// al historial, y "atrás" cierra el de arriba en vez de salir de la app.
+// Al cerrar con "Cerrar" o Escape se quita ese paso; el "popstate" que provoca eso no debe cerrar otro diálogo.
+// Un solo escuchador para todos: así cada "atrás" cierra exactamente uno, el de arriba.
+let ignoreNextPop = 0;
+const historyOwners: { close: () => void }[] = [];
+if (typeof window !== "undefined") {
+    window.addEventListener("popstate", () => {
+        if (ignoreNextPop > 0) {
+            ignoreNextPop--;
+            return;
+        }
+        historyOwners.pop()?.close();
+    });
+}
+
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 // Diálogo accesible: el foco entra al abrir, no se escapa con el tabulador y vuelve al botón que lo abrió
 const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProps) => {
     const panelRef = useRef<HTMLDivElement>(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    // Historial: un paso por diálogo abierto
+    useEffect(() => {
+        if (!open) return;
+        let closedByBack = false;
+        const owner = {
+            close: () => {
+                closedByBack = true;
+                onCloseRef.current();
+            },
+        };
+        historyOwners.push(owner);
+        window.history.pushState({ sheet: true }, "");
+        return () => {
+            const index = historyOwners.indexOf(owner);
+            if (index >= 0) historyOwners.splice(index, 1);
+            // Cerrado con el botón o Escape: se quita el paso que se añadió al abrir
+            if (!closedByBack) {
+                ignoreNextPop++;
+                window.history.back();
+            }
+        };
+    }, [open]);
 
     useEffect(() => {
         if (!open) return;

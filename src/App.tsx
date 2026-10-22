@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, Heart, LayoutGrid, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, Heart, LayoutGrid, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
@@ -9,7 +9,7 @@ import usePriceHistory from "./hooks/usePriceHistory"
 import useMediaQuery from "./hooks/useMediaQuery"
 import type { SearchableProduct } from "./hooks/useMercadona"
 
-import type { listItem } from "./types/types"
+import type { listItem, orderItem } from "./types/types"
 import { formatCurrency } from "./helpers/formatPrice"
 import { mercadonaDetail, normalizeText, toListItem } from "./helpers/mercadona"
 // componentes
@@ -39,12 +39,38 @@ const PAGE_SIZE = 40
 const FAVORITES_PREVIEW = 5
 
 // Coincide si están todas las palabras; primero lo que empieza por lo escrito
+// Plural → singular, para que "plátanos" encuentre "Plátano", "yogures" encuentre "Yogur"
+// y "nueces" encuentre "Nuez" (los nombres de Mercadona van casi siempre en singular)
+function singulars(word: string): string[] {
+  if (word.length < 4 || !word.endsWith("s")) return [];
+  const forms = [word.slice(0, -1)];
+  if (word.length >= 5 && word.endsWith("es")) forms.push(word.slice(0, -2));
+  if (word.endsWith("ces")) forms.push(`${word.slice(0, -3)}z`);
+  return forms;
+}
+
+// Palabras de un nombre ya normalizado (sin tildes y en minúsculas)
+const wordsOf = (name: string) => name.split(/[^a-z0-9]+/).filter(Boolean);
+
 function makeMatcher(term: string) {
-  const words = term.split(/\s+/).filter(Boolean);
-  const matches = (name: string) => words.every(word => name.includes(word));
+  const words = term.split(/\s+/).filter(Boolean).map(word => ({ word, alternatives: singulars(word) }));
+  // Lo escrito, en cualquier parte del nombre (como siempre); el singular, solo al principio de una palabra
+  // (si no, "ajos" → "ajo" encontraría "bajo en sal"). Un singular de 3 letras tiene que ser la palabra entera.
+  const fitsWord = (alternative: string, word: string) => alternative.length <= 3 ? word === alternative : word.startsWith(alternative);
+  const matches = (name: string) => {
+    let nameWords: string[] | null = null;
+    return words.every(({ word, alternatives }) => {
+      if (name.includes(word)) return true;
+      if (alternatives.length === 0) return false;
+      nameWords ??= wordsOf(name);
+      return alternatives.some(alternative => nameWords!.some(nameWord => fitsWord(alternative, nameWord)));
+    });
+  };
+  const first = words[0] ?? { word: "", alternatives: [] };
   const score = (name: string) => {
     if (name.startsWith(term)) return 0;
-    if (name.split(/\s+/).some(word => word.startsWith(words[0] ?? ""))) return 1;
+    if (words.length === 1 && first.alternatives.some(alternative => name.startsWith(`${alternative} `) || name === alternative)) return 0;
+    if (wordsOf(name).some(word => word.startsWith(first.word) || first.alternatives.some(alternative => fitsWord(alternative, word)))) return 1;
     return 2;
   };
   return { matches, score };
@@ -65,7 +91,7 @@ const itemDetail = (item: listItem) =>
   [item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
-  const { order, addItem, decreaseItem, removeItem, refreshOrder } = useList();
+  const { order, addItem, decreaseItem, removeItem, refreshOrder, clearOrder, restoreOrder } = useList();
   const { favorites, isFavorite, toggleFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
@@ -472,6 +498,37 @@ function App() {
     </button>
   );
 
+  // Vaciar la lista (tras la compra) con "Deshacer": sin ventana de confirmar, pero se puede recuperar
+  // mientras no se apunte nada nuevo
+  const [cleared, setCleared] = useState<orderItem[] | null>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  const clearRef = useRef<HTMLButtonElement>(null);
+  const focusAfterUndo = useRef<boolean>(false);
+  useEffect(() => {
+    if (cleared && order.length > 0) setCleared(null);
+  }, [cleared, order.length]);
+  useEffect(() => {
+    if (cleared) undoRef.current?.focus();
+  }, [cleared]);
+  useEffect(() => {
+    if (!focusAfterUndo.current || order.length === 0) return;
+    focusAfterUndo.current = false;
+    clearRef.current?.focus();
+  }, [order.length]);
+  const clearList = () => {
+    if (order.length === 0) return;
+    setCleared(order);
+    clearOrder();
+    announce(`Lista vaciada: ${order.length} ${order.length === 1 ? "producto" : "productos"}. Puedes deshacerlo.`);
+  };
+  const undoClear = () => {
+    if (!cleared) return;
+    focusAfterUndo.current = true;
+    restoreOrder(cleared);
+    setCleared(null);
+    announce("Lista recuperada.");
+  };
+
   const listPanel = (withHeader: boolean) => (
     <div className="flex h-full flex-col bg-surface">
       {withHeader && (
@@ -481,6 +538,22 @@ function App() {
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
+        {cleared && order.length === 0 && (
+          <div className="m-4 mb-0 flex flex-wrap items-center justify-between gap-3 rounded-md bg-highlight p-3 text-on-highlight">
+            <p className="text-base font-semibold">
+              Has vaciado la lista ({cleared.length} {cleared.length === 1 ? "producto" : "productos"}).
+            </p>
+            <button
+              ref={undoRef}
+              type="button"
+              onClick={undoClear}
+              className="h-11 px-4 inline-flex items-center gap-2 rounded-md bg-surface text-text text-base font-semibold"
+            >
+              <Undo2 size={20} aria-hidden="true" />
+              Deshacer
+            </button>
+          </div>
+        )}
         <ListOrder
           order={order}
           addItem={addAnnounced}
@@ -488,6 +561,20 @@ function App() {
           removeItem={removeAnnounced}
           onOpenDetails={openDetail}
         />
+        {/* Al final de la lista, lejos del PDF: después de la compra se vacía de una vez */}
+        {order.length > 0 && (
+          <div className="px-4 pb-4 pt-1">
+            <button
+              ref={clearRef}
+              type="button"
+              onClick={clearList}
+              className="h-11 px-2 inline-flex items-center gap-2 rounded-md text-base font-semibold text-danger hover:bg-surface-sunk"
+            >
+              <Trash2 size={20} aria-hidden="true" />
+              Vaciar la lista
+            </button>
+          </div>
+        )}
       </div>
       <div className="border-t border-border p-4 space-y-3 safe-bottom">
         <OrderTotal order={order} />
