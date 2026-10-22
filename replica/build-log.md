@@ -106,3 +106,16 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - **Plan B**: si Mercadona no responde (pasillos con error o carga parada sin productos), el buscador ofrece "Añadir «lo escrito» a la lista" con un toque (sin foto ni precio, `source: "manual"`); repetirlo suma cantidad. Con Mercadona funcionando no aparece.
 - **Aviso para el dueño**: `/api/mercadona?path=status` devuelve 200 si Mercadona responde y 503 si rechaza, cacheado 1 h en el CDN (vigilable con UptimeRobot u otro servicio sin cargar a Mercadona). Cada 401/403/429 queda en los registros de Vercel con la marca `[MERCADONA_RECHAZO]`.
 - Pruebas: 10/10 nuevas + 115 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · Mejoras para compradores
+
+- Proxy: lista blanca ampliada a `home/price-drops/`, `home/new-arrivals/`, `products/<id>/` y `products/<id>/similars/`. Cuentas de cliente, carrito y login siguen bloqueados.
+- Lector tolerante (`findProducts`): busca productos en cualquier parte del JSON, porque estas respuestas no están documentadas ni se han podido ver reales.
+- **Rebajas** (pestaña) con la lista oficial de bajadas de precio, agrupada por pasillo, y aviso en Favoritos ("N de tus favoritos han bajado de precio").
+- **Novedades oficiales** de Mercadona + `is_new`. Retirada la detección propia de 60 días. La pestaña ya no carga todo el catálogo.
+- **Ficha del producto** (botón "Ficha"): foto grande, marca, origen, alérgenos destacados, ingredientes, aviso de comprobar el envase, historial de precio y hasta 3 **parecidos más baratos** con su ahorro. Solo se pide al abrirla.
+- **Historial de precios** de favoritos en `localStorage["price-history:v1"]` y nota "Ha subido/bajado un X % desde que lo guardaste".
+- **PDF modo tienda**: casillas para tachar y letra de 14 pt; mismo título y datos.
+- **Enviar por WhatsApp** (`wa.me`) con la lista y el total.
+- Abrir un pasillo también actualiza precios de favoritos y lista. Diálogos apilables: Escape cierra solo el de arriba.
+- Pruebas: 27/27 nuevas + 125 de regresión; auditoría sin problemas.

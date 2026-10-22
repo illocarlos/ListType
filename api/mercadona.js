@@ -5,13 +5,15 @@
 //
 // Uso: /api/mercadona?path=categories/&lang=es&wh=svq1
 //      /api/mercadona?path=categories/112/&lang=es&wh=svq1
+//      /api/mercadona?path=home/price-drops/  ·  home/new-arrivals/  ·  products/10380/  ·  products/10380/similars/
 //      /api/mercadona?path=ping   -> comprueba que la función está desplegada (no llama a Mercadona)
 //      /api/mercadona?path=zone&pc=41300 -> almacén de un código postal: { wh: 'svq1', pc: '41300' }
 //      /api/mercadona?path=geo&lat=37.48&lon=-5.98 -> código postal de una ubicación (OpenStreetMap)
 //      /api/mercadona?path=status -> 200 si Mercadona responde, 503 si rechaza (para un vigilante externo)
 
 const UPSTREAM = 'https://tienda.mercadona.es/api/';
-const PATH_RE = /^categories\/(\d{1,6}\/)?$/;
+// Solo lectura del catálogo público de la tienda: categorías, rebajas, novedades, ficha y parecidos
+const PATH_RE = /^(categories\/(\d{1,6}\/)?|home\/(new-arrivals|price-drops)\/|products\/\d{1,8}(\.\d{1,3})?\/(similars\/)?)$/;
 const WH_RE = /^[a-z0-9]{2,10}$/;
 const PC_RE = /^\d{5}$/;
 const TIMEOUT_MS = 8000;

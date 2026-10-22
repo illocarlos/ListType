@@ -1,9 +1,10 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { Heart, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
+import { BadgePercent, Heart, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
 import useFavorites from "./hooks/useFavorites"
 import useMercadona from "./hooks/useMercadona"
+import usePriceHistory from "./hooks/usePriceHistory"
 import type { SearchableProduct } from "./hooks/useMercadona"
 
 import type { listItem } from "./types/types"
@@ -19,10 +20,12 @@ import ProductRow from "./components/ProductRow.tsx"
 import Sheet from "./components/Sheet.tsx"
 import InstallHint from "./components/InstallHint.tsx"
 import ZoneCard from "./components/ZoneCard.tsx"
+import ProductSheet from "./components/ProductSheet.tsx"
+import ShareButton from "./components/ShareButton.tsx"
 
 type Source = "todo" | "favoritos" | "mercadona"
-type HomeTab = "favoritos" | "novedades" | "pasillos"
-const HOME_TABS: HomeTab[] = ["favoritos", "novedades", "pasillos"]
+type HomeTab = "favoritos" | "novedades" | "rebajas" | "pasillos"
+const HOME_TABS: HomeTab[] = ["favoritos", "novedades", "rebajas", "pasillos"]
 
 const PAGE_SIZE = 40
 // En "Todo", cuántos favoritos se enseñan antes que los de Mercadona
@@ -38,6 +41,16 @@ function makeMatcher(term: string) {
     return 2;
   };
   return { matches, score };
+}
+
+function groupByAisle(products: SearchableProduct[]) {
+  const groups = new Map<string, SearchableProduct[]>();
+  for (const product of products) {
+    const list = groups.get(product.aisle) ?? [];
+    list.push(product);
+    groups.set(product.aisle, list);
+  }
+  return [...groups.entries()];
 }
 
 const itemDetail = (item: listItem) =>
@@ -57,28 +70,23 @@ function App() {
   const [homeTab, setHomeTab] = useState<HomeTab>("favoritos");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Novedades: hace falta el catálogo completo, así que se carga al abrir la pestaña
-  const { ensureIndex } = mercadona;
-  useEffect(() => {
-    if (homeTab === "novedades") ensureIndex();
-  }, [homeTab, ensureIndex]);
+  const [detailItem, setDetailItem] = useState<listItem | null>(null);
+  const { historyOf, changeNote } = usePriceHistory(favorites);
 
+  // Novedades: la lista oficial de Mercadona + lo que marca como nuevo (sin cargar todo el catálogo)
   const novelties = useMemo(
-    () => mercadona.searchable
-      .filter(product => product.isNew)
+    () => [...mercadona.novelties]
       .sort((a, b) => a.aisle.localeCompare(b.aisle, "es") || a.searchName.localeCompare(b.searchName, "es", { numeric: true })),
-    [mercadona.searchable]
+    [mercadona.novelties]
   );
+  const noveltiesByAisle = useMemo(() => groupByAisle(novelties), [novelties]);
 
-  const noveltiesByAisle = useMemo(() => {
-    const groups = new Map<string, SearchableProduct[]>();
-    for (const product of novelties) {
-      const list = groups.get(product.aisle) ?? [];
-      list.push(product);
-      groups.set(product.aisle, list);
-    }
-    return [...groups.entries()];
-  }, [novelties]);
+  // Rebajas: la lista oficial de bajadas de precio de Mercadona
+  const drops = useMemo(
+    () => [...mercadona.drops].sort((a, b) => a.aisle.localeCompare(b.aisle, "es") || a.searchName.localeCompare(b.searchName, "es", { numeric: true })),
+    [mercadona.drops]
+  );
+  const dropsByAisle = useMemo(() => groupByAisle(drops), [drops]);
 
 
   // Categorías de los favoritos (el pasillo de Mercadona de cada uno)
@@ -192,6 +200,7 @@ function App() {
   };
 
   const closeList = useCallback(() => setListOpen(false), []);
+  const closeDetail = useCallback(() => setDetailItem(null), []);
 
   // Plan B: Mercadona no responde (no hay pasillos o la carga se ha parado por errores)
   const mercadonaDown = mercadona.groupsState === "error"
@@ -247,13 +256,38 @@ function App() {
       key={item.id}
       item={item}
       detail={itemDetail(item)}
+      previousPrice={item.mercadonaId ? mercadona.searchableById.get(item.mercadonaId)?.previousPrice : null}
       quantity={quantityOf(item.id)}
       onAdd={addItem}
       onDecrease={decreaseFromResults}
       favorite
       onToggleFavorite={toggleFavorite}
+      note={changeNote(item)}
+      onOpenDetails={setDetailItem}
     />
   );
+
+  // Fila de un producto de Mercadona (resultados, novedades, rebajas)
+  const productRow = (product: SearchableProduct) => {
+    const item = toListItem(product);
+    return (
+      <ProductRow
+        key={product.mercadonaId}
+        item={item}
+        detail={mercadonaDetail(product)}
+        previousPrice={product.previousPrice}
+        quantity={quantityOf(item.id)}
+        onAdd={addItem}
+        onDecrease={decreaseFromResults}
+        favorite={isFavorite(item.id)}
+        onToggleFavorite={toggleFavorite}
+        onOpenDetails={setDetailItem}
+      />
+    );
+  };
+
+  // Favoritos que Mercadona tiene rebajados ahora mismo
+  const favoritesOnSale = favorites.filter(item => item.mercadonaId && mercadona.searchableById.get(item.mercadonaId)?.previousPrice);
 
   const catalogStatus = (
     <>
@@ -321,11 +355,13 @@ function App() {
           addItem={addItem}
           decreaseItem={decreaseItem}
           removeItem={removeItem}
+          onOpenDetails={setDetailItem}
         />
       </div>
       <div className="border-t border-border p-4 space-y-3 safe-bottom">
         <OrderTotal order={order} />
         <ButtonPdf order={order} />
+        <ShareButton order={order} />
       </div>
     </div>
   );
@@ -410,22 +446,7 @@ function App() {
                     Mercadona <span className="tabular">({mercadonaResults.length})</span>
                   </h2>
                   <ul className="space-y-2">
-                    {mercadonaResults.slice(0, visibleCount).map(product => {
-                      const item = toListItem(product);
-                      return (
-                        <ProductRow
-                          key={product.mercadonaId}
-                          item={item}
-                          detail={mercadonaDetail(product)}
-                          previousPrice={product.previousPrice}
-                          quantity={quantityOf(item.id)}
-                          onAdd={addItem}
-                          onDecrease={decreaseFromResults}
-                          favorite={isFavorite(item.id)}
-                          onToggleFavorite={toggleFavorite}
-                        />
-                      );
-                    })}
+                    {mercadonaResults.slice(0, visibleCount).map(productRow)}
                   </ul>
                   {mercadonaResults.length > visibleCount && (
                     <button
@@ -472,10 +493,11 @@ function App() {
               <InstallHint />
 
               {/* Pestañas de la portada */}
-              <div role="tablist" aria-label="Secciones" onKeyDown={handleTabKeys} className="mb-5 grid grid-cols-3 gap-1 rounded-md bg-surface-sunk p-1">
+              <div role="tablist" aria-label="Secciones" onKeyDown={handleTabKeys} className="mb-5 grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-md bg-surface-sunk p-1">
                 {([
                   ["favoritos", "Favoritos", favorites.length],
                   ["novedades", "Novedades", novelties.length],
+                  ["rebajas", "Rebajas", drops.length],
                   ["pasillos", "Pasillos", undefined],
                 ] as [HomeTab, string, number | undefined][]).map(([value, label, count]) => (
                   <button
@@ -493,7 +515,7 @@ function App() {
                   >
                     {label}
                     {count !== undefined && count > 0 && (
-                      <span className={`ml-1.5 tabular text-sm ${value === "novedades" ? "rounded-pill bg-highlight text-on-highlight px-1.5" : ""}`}>{count}</span>
+                      <span className={`ml-1.5 tabular text-sm ${value === "novedades" || value === "rebajas" ? "rounded-pill bg-highlight text-on-highlight px-1.5" : ""}`}>{count}</span>
                     )}
                   </button>
                 ))}
@@ -506,7 +528,7 @@ function App() {
                     {novelties.length > 0 && <span className="text-sm text-muted tabular">{novelties.length}</span>}
                   </div>
                   <p className="text-sm text-muted mb-4">
-                    Productos que Mercadona marca como nuevos o que han aparecido en los últimos 60 días.
+                    Los productos que Mercadona presenta como novedad.
                   </p>
 
                   {catalogStatus}
@@ -515,11 +537,13 @@ function App() {
                     <div className="rounded-md bg-surface p-6 text-center">
                       <Sparkles size={28} aria-hidden="true" className="mx-auto text-accent" />
                       <p className="mt-2 font-semibold">
-                        {loadingCatalog ? "Buscando novedades…" : "Ahora mismo no hay novedades"}
+                        {mercadona.homeState["new-arrivals"] === "loading" ? "Buscando novedades…" : "Ahora mismo no hay novedades"}
                       </p>
-                      {!loadingCatalog && (
+                      {mercadona.homeState["new-arrivals"] !== "loading" && (
                         <p className="text-sm text-muted mt-1">
-                          Saldrán aquí en cuanto Mercadona añada productos nuevos. La app los detecta cada vez que carga el catálogo.
+                          {mercadona.homeState["new-arrivals"] === "error"
+                            ? "No se han podido cargar las novedades de Mercadona. Inténtalo más tarde."
+                            : "Saldrán aquí en cuanto Mercadona presente productos nuevos."}
                         </p>
                       )}
                     </div>
@@ -528,22 +552,38 @@ function App() {
                       <div key={aisle} className="mb-6">
                         <h3 className="text-sm font-semibold text-muted mb-2">{aisle}</h3>
                         <ul className="space-y-2">
-                          {items.map(product => {
-                            const item = toListItem(product);
-                            return (
-                              <ProductRow
-                                key={product.mercadonaId}
-                                item={item}
-                                detail={mercadonaDetail(product)}
-                                previousPrice={product.previousPrice}
-                                quantity={quantityOf(item.id)}
-                                onAdd={addItem}
-                                onDecrease={decreaseFromResults}
-                                favorite={isFavorite(item.id)}
-                                onToggleFavorite={toggleFavorite}
-                              />
-                            );
-                          })}
+                          {items.map(productRow)}
+                        </ul>
+                      </div>
+                    ))
+                  )}
+                </section>
+              )}
+
+              {homeTab === "rebajas" && (
+                <section id="panel-rebajas" role="tabpanel" aria-labelledby="tab-rebajas">
+                  <div className="flex items-baseline justify-between gap-3 mb-1">
+                    <h2 className="text-lg font-bold">Rebajas de Mercadona</h2>
+                    {drops.length > 0 && <span className="text-sm text-muted tabular">{drops.length}</span>}
+                  </div>
+                  <p className="text-sm text-muted mb-4">Productos que han bajado de precio. El precio de antes sale tachado.</p>
+
+                  {drops.length === 0 ? (
+                    <div className="rounded-md bg-surface p-6 text-center">
+                      <BadgePercent size={28} aria-hidden="true" className="mx-auto text-accent" />
+                      <p className="mt-2 font-semibold">
+                        {mercadona.homeState["price-drops"] === "loading" ? "Buscando rebajas…" : "Ahora mismo no hay rebajas"}
+                      </p>
+                      {mercadona.homeState["price-drops"] === "error" && (
+                        <p className="text-sm text-muted mt-1">No se han podido cargar las rebajas de Mercadona. Inténtalo más tarde.</p>
+                      )}
+                    </div>
+                  ) : (
+                    dropsByAisle.map(([aisle, items]) => (
+                      <div key={aisle} className="mb-6">
+                        <h3 className="text-sm font-semibold text-muted mb-2">{aisle}</h3>
+                        <ul className="space-y-2">
+                          {items.map(productRow)}
                         </ul>
                       </div>
                     ))
@@ -570,6 +610,23 @@ function App() {
                   </div>
                 ) : (
                   <>
+                    {favoritesOnSale.length > 0 && (
+                      <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-highlight p-3 text-on-highlight" role="status">
+                        <p className="flex items-center gap-2 text-base font-semibold">
+                          <BadgePercent size={22} aria-hidden="true" className="flex-none" />
+                          {favoritesOnSale.length === 1
+                            ? "1 de tus favoritos ha bajado de precio"
+                            : `${favoritesOnSale.length} de tus favoritos han bajado de precio`}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setHomeTab("rebajas")}
+                          className="flex-none h-11 px-3 rounded-md bg-surface text-text text-base font-semibold"
+                        >
+                          Ver rebajas
+                        </button>
+                      </div>
+                    )}
                     {favoriteCategories.length > 1 && (
                       <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Categorías">
                         {favoriteCategories.map(item => (
@@ -603,6 +660,8 @@ function App() {
                 onDecrease={decreaseFromResults}
                 isFavorite={isFavorite}
                 onToggleFavorite={toggleFavorite}
+                onOpenDetails={setDetailItem}
+                onProductsLoaded={mercadona.addToPool}
               />
               </div>
               )}
@@ -638,6 +697,23 @@ function App() {
 
       <Sheet open={listOpen} title={`Tu lista (${lineCount})`} onClose={closeList} variant="full">
         {listPanel(false)}
+      </Sheet>
+
+      {/* Ficha del producto: ingredientes, alérgenos, historial y parecidos más baratos */}
+      <Sheet open={detailItem !== null} title="Ficha del producto" onClose={closeDetail} variant="full">
+        {detailItem && (
+          <ProductSheet
+            key={detailItem.mercadonaId}
+            wh={mercadona.wh}
+            item={detailItem}
+            quantityOf={quantityOf}
+            onAdd={addItem}
+            onDecrease={decreaseFromResults}
+            isFavorite={isFavorite}
+            onToggleFavorite={toggleFavorite}
+            history={historyOf(detailItem.mercadonaId)}
+          />
+        )}
       </Sheet>
     </div>
   )

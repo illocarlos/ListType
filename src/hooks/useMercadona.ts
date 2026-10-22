@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     fetchGroups,
+    fetchHomeList,
     getCachedProducts,
     getWarehouse,
     getZone,
@@ -12,7 +13,7 @@ import {
     setWarehouse,
     ZoneError,
 } from "../helpers/mercadona";
-import type { IndexProgress, Zone } from "../helpers/mercadona";
+import type { HomeList, IndexProgress, Zone } from "../helpers/mercadona";
 import type { MercadonaGroup, MercadonaProduct } from "../types/types";
 
 export type LoadState = "idle" | "loading" | "ready" | "error";
@@ -36,6 +37,30 @@ export default function useMercadona() {
     const [indexProgress, setIndexProgress] = useState<IndexProgress | null>(null);
     const [wantIndex, setWantIndex] = useState<boolean>(false);
     const runRef = useRef<number>(0);
+
+    // Rebajas y novedades oficiales de Mercadona para la zona
+    const [priceDrops, setPriceDrops] = useState<MercadonaProduct[]>([]);
+    const [newArrivals, setNewArrivals] = useState<MercadonaProduct[]>([]);
+    const [homeState, setHomeState] = useState<Record<HomeList, LoadState>>({ "price-drops": "idle", "new-arrivals": "idle" });
+
+    const loadHomeLists = useCallback(async (zoneWh: string, force = false) => {
+        const load = async (kind: HomeList, setter: (products: MercadonaProduct[]) => void) => {
+            setHomeState(previous => previous[kind] === "ready" ? previous : { ...previous, [kind]: "loading" });
+            try {
+                setter(await fetchHomeList(zoneWh, kind, force));
+                setHomeState(previous => ({ ...previous, [kind]: "ready" }));
+            } catch {
+                setHomeState(previous => previous[kind] === "ready" ? previous : { ...previous, [kind]: "error" });
+            }
+        };
+        await Promise.all([load("price-drops", setPriceDrops), load("new-arrivals", setNewArrivals)]);
+    }, []);
+
+    useEffect(() => {
+        setPriceDrops([]);
+        setNewArrivals([]);
+        loadHomeLists(wh);
+    }, [wh, loadHomeLists]);
 
     const loadGroups = useCallback(async (force = false) => {
         setGroupsState("loading");
@@ -108,6 +133,8 @@ export default function useMercadona() {
                 // sin conexión: se sigue con lo que había
             }
             if (runRef.current !== run) return;
+            await loadHomeLists(current.wh);
+            if (runRef.current !== run) return;
             await refreshStaleAisles(
                 current.wh,
                 freshGroups,
@@ -121,7 +148,7 @@ export default function useMercadona() {
         } finally {
             refreshingRef.current = false;
         }
-    }, []);
+    }, [loadHomeLists]);
 
     useEffect(() => {
         if (groupsState === "ready") backgroundRefresh();
@@ -140,6 +167,15 @@ export default function useMercadona() {
             window.clearInterval(timer);
         };
     }, [backgroundRefresh]);
+
+    // Productos cargados desde otras pantallas (p. ej. al abrir un pasillo): también actualizan favoritos y lista
+    const addToPool = useCallback((loaded: MercadonaProduct[]) => {
+        setPool(previous => {
+            const next = new Map(previous);
+            for (const product of loaded) next.set(product.mercadonaId, product);
+            return next;
+        });
+    }, []);
 
     // Carga completa del catálogo: se pide al enfocar o escribir en el buscador
     const ensureIndex = useCallback(() => setWantIndex(true), []);
@@ -180,10 +216,38 @@ export default function useMercadona() {
         }
     }, [applyWarehouse]);
 
-    // Lista preparada para buscar: nombre normalizado una sola vez
-    const searchable = useMemo<SearchableProduct[]>(
-        () => [...pool.values()].map(product => ({ ...product, searchName: normalizeText(product.name) })),
-        [pool]
+    // Lista preparada para buscar: pasillos + rebajas + novedades, con el nombre normalizado una vez.
+    // "Novedad" = lo que Mercadona publica como novedad o marca como nuevo. Las rebajas traen el precio anterior.
+    const searchable = useMemo<SearchableProduct[]>(() => {
+        const newIds = new Set(newArrivals.map(product => product.mercadonaId));
+        const merged = new Map(pool);
+        for (const product of [...priceDrops, ...newArrivals]) {
+            const existing = merged.get(product.mercadonaId);
+            merged.set(product.mercadonaId, existing
+                ? { ...existing, previousPrice: existing.previousPrice ?? product.previousPrice }
+                : product);
+        }
+        return [...merged.values()].map(product => ({
+            ...product,
+            isNew: product.isNew || newIds.has(product.mercadonaId),
+            searchName: normalizeText(product.name),
+        }));
+    }, [pool, priceDrops, newArrivals]);
+
+    const searchableById = useMemo(
+        () => new Map(searchable.map(product => [product.mercadonaId, product])),
+        [searchable]
+    );
+
+    // Las listas oficiales, con los datos más completos que haya de cada producto
+    const novelties = useMemo(() => {
+        const ids = new Set(newArrivals.map(product => product.mercadonaId));
+        return searchable.filter(product => product.isNew || ids.has(product.mercadonaId));
+    }, [searchable, newArrivals]);
+
+    const drops = useMemo(
+        () => priceDrops.map(product => searchableById.get(product.mercadonaId) ?? { ...product, searchName: normalizeText(product.name) }),
+        [priceDrops, searchableById]
     );
 
     return {
@@ -195,6 +259,11 @@ export default function useMercadona() {
         groupsError,
         loadGroups,
         searchable,
+        searchableById,
+        addToPool,
+        novelties,
+        drops,
+        homeState,
         indexState,
         indexProgress,
         ensureIndex,

@@ -16,13 +16,15 @@ type MercadonaCatalogProps = {
     onDecrease: (item: listItem) => void,
     isFavorite: (id: number) => boolean,
     onToggleFavorite: (item: listItem) => void,
+    onOpenDetails?: (item: listItem) => void,
+    onProductsLoaded?: (products: MercadonaProduct[]) => void,
 }
 
 const errorMessage = (error: unknown) =>
     error instanceof MercadonaError ? error.message : "No se ha podido cargar el pasillo.";
 
 // Explorar Mercadona por pasillos (alternativa al buscador)
-const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups, quantityOf, onAdd, onDecrease, isFavorite, onToggleFavorite }: MercadonaCatalogProps) => {
+const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups, quantityOf, onAdd, onDecrease, isFavorite, onToggleFavorite, onOpenDetails, onProductsLoaded }: MercadonaCatalogProps) => {
     const [openGroupId, setOpenGroupId] = useState<number | null>(null);
     const [aisle, setAisle] = useState<MercadonaAisle | null>(null);
     const [products, setProducts] = useState<MercadonaProduct[]>([]);
@@ -34,7 +36,9 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
         setProducts([]);
         setProductsState("loading");
         try {
-            setProducts(await fetchAisle(wh, selected.id, selected.name, force));
+            const loaded = await fetchAisle(wh, selected.id, selected.name, force);
+            setProducts(loaded);
+            onProductsLoaded?.(loaded);
             setProductsState("ready");
         } catch (error) {
             setProductsError(errorMessage(error));
@@ -105,6 +109,7 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
                                             onDecrease={onDecrease}
                                             favorite={isFavorite(item.id)}
                                             onToggleFavorite={onToggleFavorite}
+                                            onOpenDetails={onOpenDetails}
                                         />
                                     );
                                 })}

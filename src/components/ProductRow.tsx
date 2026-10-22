@@ -1,4 +1,4 @@
-import { Heart, Minus, Plus } from "lucide-react";
+import { Heart, Info, Minus, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
 import type { listItem } from "../types/types";
 import Thumb from "./Thumb";
@@ -12,11 +12,15 @@ type ProductRowProps = {
     onDecrease: (item: listItem) => void,
     favorite?: boolean,
     onToggleFavorite?: (item: listItem) => void,
+    // Cambio de precio desde que se guardó en favoritos
+    note?: { text: string, direction: "up" | "down" } | null,
+    // Abre la ficha (ingredientes, alérgenos, parecidos más baratos)
+    onOpenDetails?: (item: listItem) => void,
 }
 
 // Fila de producto pensada para todo el mundo:
 // nombre completo (sin cortar), textos de 14 px como mínimo, botones de 44 px y "Añadir" escrito.
-const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite }: ProductRowProps) => {
+const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite, note, onOpenDetails }: ProductRowProps) => {
     const inList = quantity > 0;
 
     return (
@@ -50,6 +54,15 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
 
                 {detail && <p className="text-sm text-muted break-words">{detail}</p>}
 
+                {note && (
+                    <p className={`mt-1 flex items-center gap-1.5 text-sm font-semibold ${note.direction === "up" ? "text-danger" : "text-accent-strong"}`}>
+                        {note.direction === "up"
+                            ? <TrendingUp size={18} aria-hidden="true" className="flex-none" />
+                            : <TrendingDown size={18} aria-hidden="true" className="flex-none" />}
+                        {note.text}
+                    </p>
+                )}
+
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="tabular">
                         {item.price > 0 && <span className="text-base font-bold">{formatCurrency(item.price)}</span>}
@@ -60,6 +73,18 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                             </span>
                         ) : null}
                     </p>
+
+                    <div className="flex items-center gap-1">
+                    {onOpenDetails && item.mercadonaId && (
+                        <button
+                            type="button"
+                            onClick={() => onOpenDetails(item)}
+                            className="h-11 px-3 inline-flex items-center gap-1 rounded-pill text-base font-semibold text-accent-strong hover:bg-surface-sunk"
+                        >
+                            <Info size={18} aria-hidden="true" />
+                            Ficha<span className="sr-only"> de {item.name}</span>
+                        </button>
+                    )}
 
                     {inList ? (
                         <div className="flex items-center rounded-pill bg-surface border border-border">
@@ -95,6 +120,7 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                             Añadir
                         </button>
                     )}
+                    </div>
                 </div>
             </div>
         </li>
