@@ -1,6 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { Download, Share, X } from "lucide-react";
 import { getInstallMode, promptInstall, subscribeInstall } from "../helpers/install";
+import { saveImportant } from "../helpers/mercadona";
 
 const DISMISSED_KEY = "installHintDismissed";
 
@@ -23,11 +24,8 @@ const InstallHint = () => {
     if (dismissed || mode === "installed" || mode === "none") return null;
 
     const dismiss = () => {
-        try {
-            localStorage.setItem(DISMISSED_KEY, "1");
-        } catch {
-            // se volverá a mostrar la próxima vez
-        }
+        // Si no cabe ni haciendo sitio, se volverá a mostrar la próxima vez
+        saveImportant(DISMISSED_KEY, "1");
         setDismissed(true);
     };
 

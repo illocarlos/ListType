@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { listItem, orderItem } from "../types/types";
-import { freeCacheSpace } from "../helpers/mercadona";
+import { saveImportant } from "../helpers/mercadona";
 
+// Si no hay espacio se borra caché de Mercadona (la más antigua primero): la lista siempre tiene prioridad.
+// Sin espacio ni así: se mantiene en memoria hasta el siguiente cambio.
 function saveOrder(order: orderItem[]) {
-    const value = JSON.stringify(order);
-    try {
-        localStorage.setItem("order", value);
-    } catch {
-        // Si no hay espacio, se vacía la caché de Mercadona: la lista siempre tiene prioridad
-        freeCacheSpace();
-        try {
-            localStorage.setItem("order", value);
-        } catch {
-            // Sin espacio ni tras limpiar: se mantiene en memoria hasta el siguiente cambio
-        }
-    }
+    saveImportant("order", JSON.stringify(order));
 }
 
 export default function useList() {

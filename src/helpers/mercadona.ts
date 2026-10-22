@@ -56,11 +56,8 @@ export function getZone(): Zone | null {
 }
 
 function saveZone(zone: Zone) {
-    try {
-        localStorage.setItem(ZONE_KEY, JSON.stringify(zone));
-    } catch {
-        // sin espacio: se usará durante esta sesión igualmente
-    }
+    // Si no cabe, se hace sitio borrando caché; si ni así, se usa durante esta sesión igualmente
+    saveImportant(ZONE_KEY, JSON.stringify(zone));
 }
 
 export type ZoneErrorReason = "invalid" | "no-service" | "busy" | "connection";
@@ -189,11 +186,7 @@ export function getWarehouse(): string {
 export function setWarehouse(wh: string): boolean {
     const clean = wh.trim().toLowerCase();
     if (!/^[a-z0-9]{2,10}$/.test(clean)) return false;
-    try {
-        localStorage.setItem(WAREHOUSE_KEY, clean);
-    } catch {
-        // sin espacio: se usará durante esta sesión igualmente
-    }
+    saveImportant(WAREHOUSE_KEY, clean);
     return true;
 }
 
@@ -263,9 +256,25 @@ function writeCache<T>(key: string, data: T) {
     }
 }
 
-// Vacía toda la caché de Mercadona (se usa si la lista no cabe al guardarse)
-export function freeCacheSpace() {
+// Guarda un dato del usuario (lista, favoritos, zona, historial) aunque el móvil esté lleno:
+// si no cabe, va borrando la caché de Mercadona más antigua hasta que quepa. La caché se puede
+// volver a descargar; lo que guarda el usuario no. Devuelve false solo si ni así cabe.
+export function saveImportant(key: string, value: string): boolean {
+    for (;;) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch {
+            if (!evictOldest(key)) return false;
+        }
+    }
+}
+
+// Borra la caché de otros almacenes (al cambiar de código postal deja de servir y ocupa sitio)
+export function dropOtherWarehouses(wh: string) {
+    const own = `${CACHE_PREFIX}${wh}:`;
     for (const key of cacheKeys()) {
+        if (key.startsWith(own)) continue;
         try {
             localStorage.removeItem(key);
         } catch {

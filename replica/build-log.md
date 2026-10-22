@@ -170,3 +170,14 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - Ahora el nombre del parecido es un botón ("Ficha de …", con icono de información) que abre su ficha en la misma ventana. Arriba aparece "Volver a «producto anterior»"; se puede encadenar y volver paso a paso. Al cerrar y reabrir se empieza de cero.
 - Al cambiar de producto la ficha sube arriba y el foco pasa a "Volver" (para teclado y lector de pantalla).
 - Pruebas: 13/13 nuevas + 211 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · Revisión completa: arreglos de prioridad alta
+
+Revisión de seguridad y fallos de todo el código. Se aplican los cuatro de prioridad alta:
+
+- **PDF en iPhone/iPad**: en las apps de pantalla de inicio las descargas fallan (WebKit 275288 y 290847, iOS 16–18: no hacen nada o abren una vista sin botón para volver). En iOS el PDF se entrega ahora con el menú de compartir (`navigator.share` con el archivo: Guardar en Archivos, Imprimir, WhatsApp). Si Safari no lo permite porque preparar el PDF tardó (necesita un toque reciente), aparece "Guardar o enviar el PDF" para un segundo toque. Fuera de iOS, o si no se pueden compartir archivos, descarga de siempre. Sin probar en un iPhone real.
+- **Proxy**: si Mercadona respondía 200 con algo que no son datos (página anti-bots, mantenimiento), se guardaba 12 h en el CDN y la app se quedaba sin catálogo para todos. Ahora solo se guarda JSON (objeto o lista); si no, 502 sin caché y aviso `[MERCADONA_NO_JSON]` en los registros. Además `stale-if-error=86400`: si Mercadona falla al renovar, el CDN sigue sirviendo la última copia buena 1 día.
+- **Almacenamiento lleno**: con el móvil lleno se perdían favoritos y código postal al recargar (reproducido). El catálogo completo ocupa ~1,9 millones de caracteres (~3,8 MB en Safari, de ~5 MB). `saveImportant` guarda lista, favoritos, zona, almacén, historial y aviso de instalar borrando la caché de Mercadona más antigua hasta que quepa. Al cambiar de almacén (y al abrir) se borra la caché de otros almacenes.
+- **jsPDF 3.0.2 → 4.2.1** (avisos críticos; el único cambio incompatible es del uso en Node) y `fflate` 0.8.3: 0 avisos en las dependencias de la app. Las de desarrollo (Vite, ESLint…) tienen avisos pero no llegan al móvil.
+- Pendiente de la revisión (media/baja): reintento con otro almacén en el proxy, parámetros que saltan la caché y regla de límite en Vercel, lista de rebajas guardada 24 h (no se renueva al volver, como se dijo por error), aviso de precios antiguos, cabeceras de seguridad, fuente de Google, limpieza del modo sin conexión, textos ("pulsa «Añadir»", "total: 0,00 €"), WhatsApp con listas largas.
+- Pruebas: 9/9 PDF + 8/8 almacenamiento + 5/5 proxy + 225 de regresión; auditoría sin problemas.

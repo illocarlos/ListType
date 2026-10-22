@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+    dropOtherWarehouses,
     fetchGroups,
     fetchHomeList,
     getCachedProducts,
@@ -77,8 +78,10 @@ export default function useMercadona() {
         loadGroups();
     }, [loadGroups]);
 
-    // Productos ya guardados en caché: el buscador funciona al instante con lo que haya
+    // Productos ya guardados en caché: el buscador funciona al instante con lo que haya.
+    // Antes se borra la caché de otros almacenes (de un código postal anterior): no sirve y ocupa sitio.
     useEffect(() => {
+        dropOtherWarehouses(wh);
         setPool(new Map(getCachedProducts(wh).map(product => [product.mercadonaId, product])));
     }, [wh]);
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { listItem } from "../types/types";
+import { saveImportant } from "../helpers/mercadona";
 
 const FAVORITES_KEY = "favorites";
 
@@ -16,12 +17,9 @@ export default function useFavorites() {
         }
     });
 
+    // Si el móvil está lleno, se hace sitio borrando caché de Mercadona: un favorito nunca se pierde por eso
     useEffect(() => {
-        try {
-            localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-        } catch {
-            // sin espacio: se mantiene en memoria hasta el siguiente cambio
-        }
+        saveImportant(FAVORITES_KEY, JSON.stringify(favorites));
     }, [favorites]);
 
     const favoriteIds = useMemo(() => new Set(favorites.map(item => item.id)), [favorites]);

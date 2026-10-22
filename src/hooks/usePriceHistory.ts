@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { listItem } from "../types/types";
+import { saveImportant } from "../helpers/mercadona";
 
 const HISTORY_KEY = "price-history:v1";
 const MAX_POINTS = 24;
@@ -36,11 +37,8 @@ export default function usePriceHistory(favorites: listItem[]) {
                 changed = true;
             }
             if (!changed) return previous;
-            try {
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-            } catch {
-                // sin espacio: se mantiene en memoria
-            }
+            // Si no cabe, se hace sitio borrando caché de Mercadona; si ni así, se mantiene en memoria
+            saveImportant(HISTORY_KEY, JSON.stringify(next));
             return next;
         });
     }, [favorites]);
