@@ -257,3 +257,15 @@ Pendiente o sabido:
 - La regla de límite de peticiones en Vercel la tiene que aprobar el dueño.
 
 Pruebas: 322 de regresión (e2e3–e2e23, incluidas sin conexión, política de seguridad y PDF) + 49 del proxy y del proxy de fotos; auditoría axe con 0 problemas (la única zona táctil por debajo de 44 px es el nombre, a 36 px). `tsc` y `eslint` limpios.
+
+## 2026-10-22 · Barra de abajo en el móvil (secciones + lista)
+
+- Idea sacada de las maquetas inspiradas en KitchenOwl y EasyCompra, pero con el estilo de la app (Onest, verde y amarillo de siempre).
+- **Móvil**: las pestañas Favoritos, Novedades, Rebajas y Pasillos pasan de arriba (rejilla de 2×2, unos 116 px) a una barra fija abajo, junto al botón de la lista. El botón de la lista conserva lo que tenía la barra "Ver lista": cuántos productos lleva y el total; sin precio, pone "Lista".
+- Son las mismas pestañas de antes (mismo papel de pestaña, mismos `id`, flechas del teclado): en escritorio siguen arriba y la lista en la columna derecha. Se decide con `matchMedia` (`useMediaQuery`), así solo existe una fila de pestañas a la vez y no hay `id` repetidos.
+- La barra está siempre a mano, también mientras se busca. Tocar una sección deja de buscar, la enseña y sube arriba. Tocar la sección en la que ya estás también sube arriba. Mientras se busca, ninguna sección sale marcada.
+- Números sobre los iconos: amarillo en Novedades y Rebajas, neutro en Favoritos; "99+" si pasa de 99.
+- Letra de 14 px desde 390 px de ancho, 13 px de 360 a 389 y 12 px por debajo de 360 (con 14 px, "Novedades" no cabe en 360 sin pegarse a "Rebajas"). Comprobado en 320, 360 y 390 px: los nombres no se pisan y todas las zonas de toque son de 56 px de alto.
+- "Volver arriba" queda encima de la barra sin taparla. La barra va dentro de `<nav aria-label="Menú principal">` (axe pedía que todo estuviera en una zona con nombre).
+- Vercel: creada a petición del dueño la regla de cortafuegos "Límite /api por IP" (400 peticiones por minuto por IP a `/api/`). Vercel añadió además sus reglas básicas en modo solo registrar.
+- Pruebas: 22/22 nuevas de la barra + regresión completa (e2e3–e2e23); una prueba de rebajas fallaba 1 de cada 3 veces por una carrera de la propia prueba (contaba peticiones de la carga anterior): ahora espera a que termine antes de empezar a contar, 5/5. Auditoría: 0 problemas axe, ningún texto de menos de 14 px y el foco nunca queda tapado por la barra.

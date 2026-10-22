@@ -1,10 +1,12 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, Heart, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, Heart, LayoutGrid, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, X } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
 import useFavorites from "./hooks/useFavorites"
 import useMercadona from "./hooks/useMercadona"
 import usePriceHistory from "./hooks/usePriceHistory"
+import useMediaQuery from "./hooks/useMediaQuery"
 import type { SearchableProduct } from "./hooks/useMercadona"
 
 import type { listItem } from "./types/types"
@@ -72,6 +74,9 @@ function App() {
   const [selectedCheckbox, setSelectedCheckbox] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState<boolean>(false);
   const [homeTab, setHomeTab] = useState<HomeTab>("favoritos");
+  // Escritorio (md de Tailwind): pestañas arriba y la lista en la columna derecha.
+  // Móvil: las mismas pestañas van en la barra de abajo, junto al botón de la lista.
+  const isDesktop = useMediaQuery("(min-width: 768px)");
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [detailItem, setDetailItem] = useState<listItem | null>(null);
@@ -329,6 +334,18 @@ function App() {
     searchRef.current?.focus();
   };
 
+  // Cambiar de sección. En el móvil la barra de abajo está siempre a mano: si se estaba buscando,
+  // se deja de buscar para enseñar la sección, y se sube arriba para empezarla desde el principio
+  // (también al tocar la sección en la que ya se está, como en la mayoría de apps).
+  const selectTab = (value: HomeTab) => {
+    if (searching) setQuery("");
+    setHomeTab(value);
+    if (!isDesktop) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    }
+  };
+
   // Pestañas: flechas izquierda/derecha, Inicio y Fin (patrón estándar de pestañas)
   const handleTabKeys = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const index = HOME_TABS.indexOf(homeTab);
@@ -339,9 +356,17 @@ function App() {
       : -1;
     if (next < 0) return;
     event.preventDefault();
-    setHomeTab(HOME_TABS[next]);
+    selectTab(HOME_TABS[next]);
     document.getElementById(`tab-${HOME_TABS[next]}`)?.focus();
   };
+
+  // Secciones de la portada: nombre, número (solo en las pestañas de escritorio) e icono (barra del móvil)
+  const homeTabs: [HomeTab, string, number | undefined, LucideIcon][] = [
+    ["favoritos", "Favoritos", favorites.length, Heart],
+    ["novedades", "Novedades", novelties.length, Sparkles],
+    ["rebajas", "Rebajas", drops.length, BadgePercent],
+    ["pasillos", "Pasillos", undefined, LayoutGrid],
+  ];
 
   // Lo que oye quien usa lector de pantalla al buscar
   const resultsAnnouncement = !searching ? ""
@@ -610,14 +635,10 @@ function App() {
               <ZoneCard zone={mercadona.zone} onChange={mercadona.changePostalCode} />
               <InstallHint />
 
-              {/* Pestañas de la portada */}
+              {/* Pestañas de la portada (escritorio; en el móvil están en la barra de abajo) */}
+              {isDesktop && (
               <div role="tablist" aria-label="Secciones" onKeyDown={handleTabKeys} className="mb-5 grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-md bg-surface-sunk p-1">
-                {([
-                  ["favoritos", "Favoritos", favorites.length],
-                  ["novedades", "Novedades", novelties.length],
-                  ["rebajas", "Rebajas", drops.length],
-                  ["pasillos", "Pasillos", undefined],
-                ] as [HomeTab, string, number | undefined][]).map(([value, label, count]) => (
+                {homeTabs.map(([value, label, count]) => (
                   <button
                     key={value}
                     type="button"
@@ -626,7 +647,7 @@ function App() {
                     aria-selected={homeTab === value}
                     aria-controls={homeTab === value ? `panel-${value}` : undefined}
                     tabIndex={homeTab === value ? 0 : -1}
-                    onClick={() => setHomeTab(value)}
+                    onClick={() => selectTab(value)}
                     className={`h-11 rounded-sm text-base font-semibold transition-colors duration-200 ${homeTab === value
                       ? "bg-surface text-text shadow-sm"
                       : "text-muted hover:text-text"}`}
@@ -638,6 +659,7 @@ function App() {
                   </button>
                 ))}
               </div>
+              )}
 
               {homeTab === "novedades" && (
                 <section id="panel-novedades" role="tabpanel" aria-labelledby="tab-novedades">
@@ -797,23 +819,62 @@ function App() {
         </aside>
       </div>
 
-      {/* Lista: barra inferior en el móvil */}
-      <div className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-surface shadow-bar px-4 pt-3 safe-bottom">
-        <button
-          type="button"
-          onClick={() => setListOpen(true)}
-          className="w-full h-14 flex items-center gap-3 rounded-md bg-accent px-4 text-on-accent"
-        >
-          <span className="relative">
-            <ShoppingBasket size={24} aria-hidden="true" />
-            <span aria-hidden="true" className="absolute -top-2.5 -right-3.5 min-w-[24px] h-[24px] px-1 rounded-pill bg-highlight text-on-highlight text-sm font-bold grid place-items-center tabular">
-              {lineCount}
+      {/* Móvil: barra de abajo con las secciones (las mismas pestañas que arriba en escritorio) y la lista.
+          Siempre a mano, también mientras se busca: tocar una sección deja de buscar y la enseña. */}
+      {!isDesktop && (
+      <nav aria-label="Menú principal" className="fixed inset-x-0 bottom-0 z-40 bg-surface shadow-bar px-2 pt-2 safe-bottom">
+        <div className="mx-auto flex max-w-content items-stretch gap-1">
+          <div role="tablist" aria-label="Secciones" onKeyDown={handleTabKeys} className="flex min-w-0 flex-1">
+            {homeTabs.map(([value, label, count, Icon]) => {
+              const active = homeTab === value && !searching;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  id={`tab-${value}`}
+                  aria-selected={active}
+                  aria-controls={active ? `panel-${value}` : undefined}
+                  tabIndex={homeTab === value ? 0 : -1}
+                  onClick={() => selectTab(value)}
+                  className={`relative min-w-0 flex-auto h-14 flex flex-col items-center justify-center gap-0.5 rounded-md text-sm max-[389px]:text-[13px] max-[359px]:text-xs transition-colors duration-200 ${active
+                    ? "font-bold text-accent-strong"
+                    : "font-semibold text-muted hover:text-text"}`}
+                >
+                  <span aria-hidden="true" className={`h-7 w-12 grid place-items-center rounded-pill transition-colors duration-200 ${active ? "bg-accent-soft text-on-accent-soft" : ""}`}>
+                    <Icon size={22} />
+                  </span>
+                  <span className="whitespace-nowrap leading-tight">{label}</span>
+                  {/* Número sobre el icono: amarillo en novedades y rebajas (llama la atención), neutro en favoritos */}
+                  {count !== undefined && count > 0 && (
+                    <span className={`absolute top-0.5 left-[calc(50%+4px)] min-w-[22px] h-[22px] px-1 rounded-pill text-sm font-bold leading-none grid place-items-center tabular ${value === "favoritos" ? "bg-surface-sunk text-text" : "bg-highlight text-on-highlight"}`}>
+                      <span className="sr-only">, </span>{count > 99 ? "99+" : count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => setListOpen(true)}
+            aria-haspopup="dialog"
+            className="flex-none w-[84px] max-[389px]:w-[76px] max-[359px]:w-[68px] h-14 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent text-on-accent"
+          >
+            <span aria-hidden="true" className="relative h-7 grid place-items-center">
+              <ShoppingBasket size={22} />
+              <span className="absolute -top-1.5 left-[15px] min-w-[22px] h-[22px] px-1 rounded-pill bg-highlight text-on-highlight text-sm font-bold grid place-items-center tabular">
+                {lineCount}
+              </span>
             </span>
-          </span>
-          <span className="ml-3 font-semibold">Ver lista<span className="sr-only">, {lineCount} {lineCount === 1 ? "producto" : "productos"},</span></span>
-          <span className="ml-auto text-lg font-extrabold tabular">{formatCurrency(total)}</span>
-        </button>
-      </div>
+            <span className="sr-only">Ver lista, {lineCount} {lineCount === 1 ? "producto" : "productos"}{total > 0 ? "," : ""}</span>
+            {total > 0
+              ? <span className="whitespace-nowrap text-sm font-extrabold leading-tight tabular">{formatCurrency(total)}</span>
+              : <span aria-hidden="true" className="whitespace-nowrap text-sm font-extrabold leading-tight">Lista</span>}
+          </button>
+        </div>
+      </nav>
+      )}
 
       <BackToTop focusTargetId="app-title" />
 
