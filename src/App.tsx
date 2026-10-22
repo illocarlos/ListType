@@ -839,8 +839,9 @@ function App() {
                   onClick={() => selectTab(value)}
                   className={`relative min-w-0 flex-auto h-14 flex flex-col items-center justify-center gap-0.5 rounded-md text-sm max-[389px]:text-[13px] max-[359px]:text-xs transition-colors duration-200 ${active
                     ? "font-bold text-accent-strong"
-                    : "font-semibold text-muted hover:text-text"}`}
+                    : "font-semibold text-muted"}`}
                 >
+                  {/* Sin estilo hover: en el iPhone se queda pegado tras tocar y la sección parecería marcada */}
                   <span aria-hidden="true" className={`h-7 w-12 grid place-items-center rounded-pill transition-colors duration-200 ${active ? "bg-accent-soft text-on-accent-soft" : ""}`}>
                     <Icon size={22} />
                   </span>
