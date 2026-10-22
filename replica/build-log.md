@@ -137,3 +137,11 @@ Pruebas: 46/46 en Chromium (escritorio 1440 px y móvil 390 px) con respuestas s
 - Prueba con el catálogo real completo pasado por la app: 5.255 entradas comparadas una a una (precio, precio anterior, granel, nombre, foto) con 0 discrepancias; un producto que está en dos pasillos sale una vez en el buscador.
 - Sin verificar con respuesta real: la forma exacta de `home/price-drops/` y `products/<id>/similars/` (el lector tolerante y el filtro `previousPrice > price` cubren las variantes).
 - Pruebas: 40/40 + 9/9 con datos reales + 125 de regresión; auditoría sin problemas.
+
+## 2026-10-22 · La app instalada se actualiza
+
+- Causa: el iPhone deja la app instalada dormida en memoria; al abrir el acceso directo la "despierta" sin volver a cargar la página, así que seguía la versión vieja aunque Vercel ya tuviera otra (el service worker ya pedía la página primero a la red, pero solo cuando se carga).
+- **Detección de versión nueva** (`src/helpers/appUpdate.ts`): pide `/` a la red sin caché y compara el nombre de `/assets/index-<huella>.js` con el que está funcionando. Al abrir, al volver a la app y cada hora.
+- Al volver tras 2 min o más fuera, si hay versión nueva y aún no se ha tocado nada ni hay una ventana abierta, **se recarga sola**. Si no, aviso "Hay una versión nueva de la app" con botón "Actualizar ahora" (zona `role=status`).
+- **Tirar hacia abajo para actualizar** solo en la app instalada (en el navegador ya existe el gesto propio): desde arriba del todo, sin ventana abierta, vertical; indicador "Desliza / Suelta para actualizar / Actualizando…". Recargar no fuerza a bajar otra vez el catálogo (sigue la caché de 24 h y la del CDN de 12 h); la lista y los favoritos no se pierden.
+- Pruebas: 19/19 nuevas + 174 de regresión (incluye datos reales); auditoría sin problemas.

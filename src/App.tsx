@@ -22,6 +22,7 @@ import InstallHint from "./components/InstallHint.tsx"
 import ZoneCard from "./components/ZoneCard.tsx"
 import ProductSheet from "./components/ProductSheet.tsx"
 import ShareButton from "./components/ShareButton.tsx"
+import AppUpdate from "./components/AppUpdate.tsx"
 
 type Source = "todo" | "favoritos" | "mercadona"
 type HomeTab = "favoritos" | "novedades" | "rebajas" | "pasillos"
@@ -412,6 +413,7 @@ function App() {
 
       <div className="mx-auto max-w-content px-4 md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-8">
         <main className="pt-4 pb-32 md:pb-12">
+          <AppUpdate />
           <p role="status" aria-live="polite" className="sr-only">{resultsAnnouncement}</p>
           <p role="status" aria-live="polite" className="sr-only">{manualAdded}</p>
           {searching ? (
