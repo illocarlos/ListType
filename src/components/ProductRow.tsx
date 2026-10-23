@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Heart, Info, Minus, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Heart, Info, Minus, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
 import type { listItem } from "../types/types";
 import Thumb from "./Thumb";
@@ -9,7 +9,8 @@ type ProductRowProps = {
     detail?: string,
     previousPrice?: number | null,
     quantity: number,
-    onAdd: (item: listItem) => void,
+    // from: el botón pulsado (para la animación de "se añade a la lista")
+    onAdd: (item: listItem, from?: HTMLElement) => void,
     onDecrease: (item: listItem) => void,
     favorite?: boolean,
     onToggleFavorite?: (item: listItem) => void,
@@ -17,13 +18,22 @@ type ProductRowProps = {
     note?: { text: string, direction: "up" | "down" } | null,
     // Abre la ficha (ingredientes, alérgenos, parecidos más baratos)
     onOpenDetails?: (item: listItem) => void,
+    // Solo añadir (Favoritos): la fila no refleja lo que hay en la lista; siempre el botón +, y cada toque suma uno
+    addOnly?: boolean,
 }
 
 // Fila de producto compacta pensada para todo el mundo:
 // nombre completo (sin cortar), textos de 14 px como mínimo y botones de 44 px.
 // Precio y botón + van en la misma línea; la ficha se abre tocando el nombre (lleva el icono de información).
-const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite, note, onOpenDetails }: ProductRowProps) => {
-    const inList = quantity > 0;
+const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite, note, onOpenDetails, addOnly = false }: ProductRowProps) => {
+    const inList = !addOnly && quantity > 0;
+    // Tras añadir (solo Favoritos): el + enseña un ✓ un momento
+    const [justAdded, setJustAdded] = useState<boolean>(false);
+    useEffect(() => {
+        if (!justAdded) return;
+        const timer = window.setTimeout(() => setJustAdded(false), 900);
+        return () => window.clearTimeout(timer);
+    }, [justAdded]);
     const canOpen = Boolean(onOpenDetails && item.mercadonaId);
 
     // Al añadir, el botón + redondo se cambia por − n +; al quitar la última unidad, al revés.
@@ -146,13 +156,18 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                             ref={addRef}
                             type="button"
                             onClick={event => {
+                                if (addOnly) {
+                                    onAdd(item, event.currentTarget);
+                                    setJustAdded(true);
+                                    return;
+                                }
                                 if (document.activeElement === event.currentTarget) focusNext.current = "plus";
                                 onAdd(item);
                             }}
                             aria-label={`Añadir ${item.name} a la lista`}
-                            className="h-11 w-11 grid place-items-center rounded-full bg-accent text-on-accent hover:bg-accent-strong"
+                            className={`h-11 w-11 grid place-items-center rounded-full text-on-accent transition-transform duration-150 hover:bg-accent-strong ${justAdded ? "bg-accent-strong motion-safe:scale-110" : "bg-accent"}`}
                         >
-                            <Plus size={22} aria-hidden="true" />
+                            {justAdded ? <Check size={22} strokeWidth={3} aria-hidden="true" /> : <Plus size={22} aria-hidden="true" />}
                         </button>
                     )}
                     </div>

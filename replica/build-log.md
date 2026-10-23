@@ -421,3 +421,13 @@ Pedido por el dueño: quitar "Enviar por WhatsApp" (no hace falta) y que las fil
 - Lo que está en el carro: tarjeta gris, nombre tachado y solo la cantidad cogida.
 - El botón "Ficha" aparte desaparece: la ficha se abre tocando el nombre, como en Favoritos (mismo nombre accesible "Ficha de…").
 - Pruebas: regresión completa; se adaptaron tres pruebas antiguas que pulsaban el botón de WhatsApp.
+
+## 2026-10-23 · Favoritos no reflejan la lista + animación al añadir
+
+Pedido por el dueño: al añadir desde Favoritos debe verse que va a la lista, y Favoritos no debe sincronizarse con la lista (si en la lista se quitan unidades, Favoritos no cambia; tras añadir, la fila queda "por defecto").
+
+- Las filas de Favoritos (también las que salen arriba al buscar) son de **solo añadir**: siempre blancas y con el botón +. Cada toque suma una unidad a la lista. Ya no muestran − cantidad + ni se ponen verdes.
+- **Animación:** el botón enseña un ✓ un momento y sale un "+1" que vuela hasta el botón «Lista» de la barra de abajo (o hasta la columna de la lista en escritorio), que da un saltito. Sin desvanecerse, para que el "+1" se lea bien todo el vuelo.
+- Con "reducir movimiento" no vuela nada; solo el ✓. El lector de pantalla sigue oyendo "Añadido: … N unidades en la lista". El foco se queda en el botón.
+- Resultados de Mercadona, Novedades, Rebajas y Pasillos no cambian (siguen con − cantidad +).
+- Pruebas: 17/17 nuevas + regresión completa; dos pruebas antiguas adaptadas (usaban el − cantidad + de Favoritos).
