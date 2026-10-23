@@ -22,6 +22,8 @@ const TTL_SECONDS = 90 * 24 * 60 * 60;
 const MAX_ITEMS = 300;
 const MAX_OPS = 50;
 const MAX_BODY = 100_000;
+import { credentials } from './_redis.js';
+
 const TIMEOUT_MS = 8000;
 const IMAGE_PREFIX = 'https://prod-mercadona.imgix.net/';
 // Crear listas es lo único sin llave y que gasta: se limita para que nadie agote la cuota gratis.
@@ -30,21 +32,6 @@ const IMAGE_PREFIX = 'https://prod-mercadona.imgix.net/';
 const CREATE_PER_IP_HOUR = 40;
 const CREATE_GLOBAL_DAY = 800;
 
-// Upstash conectado desde Vercel: según la versión de la integración las variables se llaman KV_REST_API_* o
-// UPSTASH_REDIS_REST_*, y al conectarla se les puede poner un prefijo (p. ej. STORAGE_KV_REST_API_URL)
-function credentials() {
-    const env = process.env;
-    for (const [urlName, tokenName] of [['KV_REST_API_URL', 'KV_REST_API_TOKEN'], ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']]) {
-        if (env[urlName] && env[tokenName]) return { url: env[urlName], token: env[tokenName] };
-    }
-    // Con prefijo: o se añade delante (STORAGE_KV_REST_API_URL) o sustituye a "KV" (STORAGE_REST_API_URL)
-    for (const key of Object.keys(env).sort()) {
-        const match = key.match(/^(.+_)(KV_REST_API|UPSTASH_REDIS_REST|REST_API)_URL$/);
-        const token = match && env[`${match[1]}${match[2]}_TOKEN`];
-        if (match && /^https?:\/\//.test(env[key] || '') && token) return { url: env[key], token };
-    }
-    return { url: '', token: '' };
-}
 const redisUrl = () => credentials().url;
 const redisToken = () => credentials().token;
 
