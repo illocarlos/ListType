@@ -31,6 +31,7 @@ import AddStoreProduct from "./components/AddStoreProduct.tsx"
 import LoadingProducts from "./components/LoadingProducts.tsx"
 import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
 import { takeShareFromHash } from "./helpers/sync"
+import { flyToList } from "./helpers/flyToList"
 import type { JoinMode } from "./hooks/useList"
 import { isNewHost, isOldHost } from "./helpers/move"
 
@@ -479,14 +480,20 @@ function App() {
     </div>
   );
 
+  // Favoritos no reflejan la lista: cada toque en + suma uno y la fila se queda igual (con animación hacia la lista)
+  const addFromFavorite = (item: listItem, from?: HTMLElement) => {
+    addAnnounced(item);
+    if (from) flyToList(from);
+  };
   const favoriteRow = (item: listItem) => (
     <ProductRow
       key={item.id}
       item={item}
       detail={itemDetail(item)}
       previousPrice={item.mercadonaId ? mercadona.searchableById.get(item.mercadonaId)?.previousPrice : null}
-      quantity={quantityOf(item.id)}
-      onAdd={addAnnounced}
+      quantity={0}
+      addOnly
+      onAdd={addFromFavorite}
       onDecrease={decreaseFromResults}
       favorite
       onToggleFavorite={toggleFavoriteKeepFocus}
@@ -1078,7 +1085,7 @@ function App() {
 
         {/* Lista: columna fija en escritorio */}
         <aside className="hidden md:block" aria-label="Tu lista">
-          <div className="sticky top-[136px] mt-4 h-[calc(100vh-152px)] overflow-hidden rounded-lg border border-border shadow-pop">
+          <div data-list-target className="sticky top-[136px] mt-4 h-[calc(100vh-152px)] overflow-hidden rounded-lg border border-border shadow-pop">
             {listPanel(true)}
           </div>
         </aside>
@@ -1125,6 +1132,7 @@ function App() {
             type="button"
             onClick={() => setListOpen(true)}
             aria-haspopup="dialog"
+            data-list-target
             className="flex-none w-[84px] max-[389px]:w-[76px] max-[359px]:w-[68px] h-14 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent text-on-accent"
           >
             <span aria-hidden="true" className="relative h-7 grid place-items-center">
