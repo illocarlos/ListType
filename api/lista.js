@@ -23,6 +23,11 @@ const MAX_OPS = 50;
 const MAX_BODY = 100_000;
 const TIMEOUT_MS = 8000;
 const IMAGE_PREFIX = 'https://prod-mercadona.imgix.net/';
+// Crear listas es lo único sin llave y que gasta: se limita para que nadie agote la cuota gratis.
+// Más que de sobra para una familia; una web que intente crear miles de listas se topa con esto.
+// El tope global es el cortafuegos del monedero aunque alguien use muchas IPs.
+const CREATE_PER_IP_HOUR = 40;
+const CREATE_GLOBAL_DAY = 800;
 
 // Upstash conectado desde Vercel: según la versión de la integración las variables se llaman KV_REST_API_* o
 // UPSTASH_REDIS_REST_*, y al conectarla se les puede poner un prefijo (p. ej. STORAGE_KV_REST_API_URL)
@@ -192,7 +197,33 @@ function newId() {
     return Buffer.from(bytes).toString('base64url');
 }
 
-async function create(body) {
+// IP de quien llama. Se usa la que pone Vercel y que el cliente no puede falsear: primero x-real-ip; si no,
+// el ÚLTIMO valor de x-forwarded-for (el que añade el proxy), no el primero, que sí lo puede poner el cliente.
+function clientIp(req) {
+    const h = req.headers || {};
+    const real = (h['x-real-ip'] || '').toString().trim();
+    if (real) return real.slice(0, 60);
+    const xff = Array.isArray(h['x-forwarded-for']) ? h['x-forwarded-for'].join(',') : (h['x-forwarded-for'] || '').toString();
+    const parts = xff.split(',').map(part => part.trim()).filter(Boolean);
+    return (parts[parts.length - 1] || 'desconocida').slice(0, 60);
+}
+
+// Tope de creación de listas por IP y por hora, y un tope global al día como cortafuegos del gasto.
+// Cuesta 2 operaciones de Redis, solo al crear (algo que se hace muy de vez en cuando).
+async function limitCreate(req) {
+    const now = Date.now();
+    const ipKey = `ml:rl:ip:${clientIp(req)}:${Math.floor(now / 3_600_000)}`;
+    const allKey = `ml:rl:all:${Math.floor(now / 86_400_000)}`;
+    const [ipCount, allCount] = await redis([['INCR', ipKey], ['INCR', allKey]], false);
+    const expires = [];
+    if (Number(ipCount) === 1) expires.push(['EXPIRE', ipKey, 3600]);
+    if (Number(allCount) === 1) expires.push(['EXPIRE', allKey, 86400]);
+    if (expires.length) await redis(expires, false).catch(() => undefined);
+    if (Number(ipCount) > CREATE_PER_IP_HOUR || Number(allCount) > CREATE_GLOBAL_DAY) throw new HttpError(429, 'rate_limited');
+}
+
+async function create(body, req) {
+    await limitCreate(req);
     const id = newId();
     const k = keys(id);
     const items = Array.isArray(body.items) ? body.items : [];
@@ -294,6 +325,22 @@ function send(res, status, body) {
     return res.status(status).json(body);
 }
 
+// Rechaza las peticiones de navegador que llegan desde OTRA web (una página ajena que intente usar el
+// navegador de quien la visita para tocar la API). Los navegadores modernos mandan Sec-Fetch-Site; en un
+// Safari antiguo se mira el Origin. Sin ninguna de las dos (no es un navegador) se deja pasar.
+function fromAnotherSite(req) {
+    const h = req.headers || {};
+    const site = (h['sec-fetch-site'] || '').toString();
+    if (site) return !['same-origin', 'same-site', 'none'].includes(site);
+    const origin = (h['origin'] || '').toString();
+    if (!origin) return false;
+    try {
+        return new URL(origin).host !== (h['host'] || '').toString();
+    } catch {
+        return true;
+    }
+}
+
 export default async function handler(req, res) {
     // GET sin nada más: solo dice si la base de datos está conectada (para comprobarlo tras publicar)
     if (req.method === 'GET') return send(res, 200, { ok: true, configured: Boolean(redisUrl() && redisToken()) });
@@ -301,6 +348,7 @@ export default async function handler(req, res) {
         res.setHeader('Allow', 'GET, POST');
         return send(res, 405, { error: 'method_not_allowed' });
     }
+    if (fromAnotherSite(req)) return send(res, 403, { error: 'cross_site' });
     let body;
     try {
         body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
@@ -316,7 +364,7 @@ export default async function handler(req, res) {
                 if (!redisUrl() || !redisToken()) throw new HttpError(503, 'not_configured');
                 return send(res, 200, { ok: true });
             case 'create':
-                return send(res, 200, await create(body));
+                return send(res, 200, await create(body, req));
             case 'get':
                 return send(res, 200, await get(body));
             case 'apply':

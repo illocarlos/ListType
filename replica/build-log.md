@@ -378,3 +378,15 @@ Pedido por el dueño: que 2, 3 o 4 móviles tengan la misma lista, "como Tricoun
   - App: 49/49 con 5 móviles simulados (crear, unirse juntando o no, pegar enlace, cambios cruzados, + a la vez, tachar, sin conexión, dejar de compartir, vaciar y deshacer, quitar lo del carro, recarga, consumo a la vista y en segundo plano, reintento sin duplicar, lista borrada, enlace malo, sin base de datos, axe).
   - Regresión completa.
 - Conectada la base de datos Upstash (plan Free, Frankfurt) al proyecto con prefijo `KV`. La función acepta también el prefijo que sustituye a "KV" (`STORAGE_REST_API_URL`) y solo direcciones http(s). Esta publicación es la que carga las claves en producción (las variables solo llegan a despliegues nuevos).
+
+## 2026-10-23 · Refuerzo de seguridad de la lista compartida
+
+Repaso de seguridad del endpoint nuevo (`api/lista.js`), atacándolo de verdad contra la copia local y blindando lo encontrado. Lo que ya estaba bien se dejó como estaba: identificador de 128 bits (no se adivina), validación campo a campo, solo fotos de Mercadona, claves de Redis siempre a partir de valores validados (sin inyección), CSP estricta, proxies con lista blanca, y `npm audit` sin fallos. El repo es público pero no contiene secretos (las claves de Upstash viven solo en variables de Vercel).
+
+Dos defensas añadidas:
+- **Peticiones desde otra web (CSRF).** Una página ajena podía usar el navegador de su visitante para llamar a la API. Ahora se rechazan (403) las peticiones de navegador que llegan desde otro sitio: se mira `Sec-Fetch-Site` y, en Safari viejo, el `Origin`. La propia app (mismo origen) y los clientes que no son navegador pasan. Se suma a que una petición con JSON desde otra web ya chocaba con el preflight de CORS: doble barrera.
+- **Agotar la cuota gratis creando listas (denegación de monedero).** Crear lista es lo único sin llave y que gasta. Ahora hay tope por IP (40/hora) y un tope global al día (800) como cortafuegos del gasto. Leer y cambiar una lista existente no se limitan (es lo que usa la familia a diario). La IP se toma de la que pone Vercel y el cliente no puede falsear (x-real-ip, o el último valor de x-forwarded-for), no de la que podría poner él.
+
+Pruebas: 14/14 de seguridad (CSRF desde otra web y en Safari viejo, la app propia sí pasa, tope por IP, otra IP no afectada, no se puede falsear la IP, leer sin límite, caducidad de los contadores) + regresión completa e2e3–e2e30 + servidor 49/49.
+
+Pendiente (fuera del código): en Vercel hay una regla de firewall de 400 peticiones/60 s por IP sobre `/api/`. Conviene mantenerla; el tope de la app es ahora la protección real del gasto.
