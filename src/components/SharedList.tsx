@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, Cloud, CloudOff, Copy, LogOut, MessageCircle, RefreshCw, Users } from "lucide-react";
 import { readShareCode, shareLink, syncErrorText, type SyncStatus } from "../helpers/sync";
-import type { JoinMode } from "../hooks/useList";
 
 const STATUS_TEXT: Record<SyncStatus, string> = {
     local: "",
@@ -329,23 +328,21 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
 };
 
 type JoinPanelProps = {
-    inviteId: string,
-    currentSharedId: string | null,
-    localCount: number,
+    alreadyIn: boolean,
     myName: string,
     onName: (text: string) => void,
-    onJoin: (mode: JoinMode) => Promise<void>,
+    onJoin: () => Promise<void>,
     onCancel: () => void,
 };
 
-// Contenido de la hoja que sale al abrir un enlace de invitación
-export const JoinPanel = ({ inviteId, currentSharedId, localCount, myName, onName, onJoin, onCancel }: JoinPanelProps) => {
+// Hoja al abrir un enlace de invitación: la lista compartida se añade como una lista nueva.
+export const JoinPanel = ({ alreadyIn, myName, onName, onJoin, onCancel }: JoinPanelProps) => {
     const [busy, setBusy] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
     const [name, setName] = useState<string>(myName);
     const [nameError, setNameError] = useState<string>("");
     const nameRef = useRef<HTMLInputElement>(null);
-    const run = async (mode: JoinMode) => {
+    const run = async () => {
         if (!hasName(name)) {
             setNameError(NAME_MISSING);
             nameRef.current?.focus();
@@ -356,55 +353,34 @@ export const JoinPanel = ({ inviteId, currentSharedId, localCount, myName, onNam
         setError("");
         onName(name);
         try {
-            await onJoin(mode);
+            await onJoin();
         } catch (failure) {
             setError(syncErrorText(failure));
             setBusy(false);
         }
     };
     const primary = "w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent text-on-accent text-base font-semibold hover:bg-accent-strong disabled:opacity-60";
-    const secondary = "w-full h-12 rounded-md border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft disabled:opacity-60";
     const quiet = "w-full h-12 rounded-md border border-border bg-surface text-base font-semibold hover:bg-surface-sunk";
 
-    if (currentSharedId === inviteId) {
+    if (alreadyIn) {
         return (
             <div className="p-4">
-                <p className="text-base">Ya estás en esta lista compartida.</p>
-                <button type="button" onClick={onCancel} className={`mt-4 ${primary}`}>Vale</button>
+                <p className="text-base">Ya estás en esta lista compartida. La tienes en «Mis listas».</p>
+                <button type="button" onClick={onJoin} className={`mt-4 ${primary}`}>Abrirla</button>
             </div>
         );
     }
     return (
         <div className="p-4">
-            <p className="text-base">Te han invitado a una lista de la compra compartida: lo que uno apunte o tache, lo veréis todos.</p>
-            {currentSharedId ? (
-                <p className="mt-2 text-base">Ya estás en otra lista compartida. Si te cambias, en este móvil dejarás de ver la otra.</p>
-            ) : localCount > 0 ? (
-                <p className="mt-2 text-base">Ahora tienes {localCount} {localCount === 1 ? "producto" : "productos"} en tu lista.</p>
-            ) : null}
+            <p className="text-base">Te han invitado a una lista de la compra compartida: lo que uno apunte o tache, lo veréis todos. Se añadirá a «Mis listas».</p>
             <NameField value={name} onChange={text => {
                 setName(text);
                 if (nameError && hasName(text)) setNameError("");
             }} error={nameError} inputRef={nameRef} />
             <div className="mt-4 space-y-2">
-                {currentSharedId ? (
-                    <button type="button" disabled={busy} onClick={() => run("replace")} className={primary}>
-                        {busy ? "Uniéndote…" : "Cambiarme a esta lista"}
-                    </button>
-                ) : localCount > 0 ? (
-                    <>
-                        <button type="button" disabled={busy} onClick={() => run("merge")} className={primary}>
-                            {busy ? "Uniéndote…" : "Unirme y añadir mis productos"}
-                        </button>
-                        <button type="button" disabled={busy} onClick={() => run("replace")} className={secondary}>
-                            Unirme sin mis productos
-                        </button>
-                    </>
-                ) : (
-                    <button type="button" disabled={busy} onClick={() => run("replace")} className={primary}>
-                        {busy ? "Uniéndote…" : "Unirme a la lista"}
-                    </button>
-                )}
+                <button type="button" disabled={busy} onClick={run} className={primary}>
+                    {busy ? "Uniéndote…" : "Unirme a la lista"}
+                </button>
                 <button type="button" onClick={onCancel} className={quiet}>Ahora no</button>
             </div>
             {error && <p role="alert" className="mt-3 text-base font-semibold text-danger">{error}</p>}
