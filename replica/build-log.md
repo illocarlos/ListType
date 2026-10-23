@@ -446,3 +446,18 @@ Pedido por el dueño: poder tener varias listas, compartidas o solo en el móvil
 - Arreglo de paso: `Sheet` reiniciaba el foco cuando cambiaba la función `onClose` entre renders; ahora usa una referencia estable.
 - El título de la hoja móvil sigue mostrando el número: «La compra (3)».
 - Pruebas: e2e33 22/22 nuevas + regresión completa; e2e30 y e2e31 reescritas para el nuevo «unirse».
+
+## 2026-10-23 · Copia compartida del catálogo en la base de datos
+
+Pedido por el dueño: para no multiplicar las peticiones a Mercadona, que el primer móvil de cada zona la pida y el resto reciba la copia guardada en la base de datos.
+
+- `api/_catalogcache.js` (nuevo; el guion bajo hace que Vercel no lo trate como función) y cambios en `api/mercadona.js`. Las credenciales de Upstash pasan a `api/_redis.js`, que usan las dos funciones.
+- Orden de consulta: CDN de Vercel → copia en la base de datos → Mercadona. Una copia por almacén y ruta (`mc:{wh}:{path}`), comprimida (gzip), fresca 12 h y conservada 2 días.
+- **Una sola petición aunque lleguen muchas a la vez:** el primero toma un turno (SET NX, 20 s); los demás esperan su copia (hasta ~5 s) o, si tienen una vieja, reciben esa al momento.
+- **Mercadona falla, rechaza (401/403/429), devuelve una página o no responde:** se sirve la última copia (hasta 2 días), con su edad real para que la app la muestre; no se insiste. Un 404 («no existe en tu zona») no se tapa.
+- **El CDN guarda la copia solo lo que le queda de frescura** (no 12 h fijas), para que la edad máxima de un precio siga siendo la de antes y las capas no se sumen.
+- **Si la base de datos falla, no está o llega al límite:** todo sigue como antes (se pide a Mercadona; el CDN sigue). Nunca bloquea la respuesta: 1,5 s de espera máxima por consulta.
+- **Topes diarios** (la base de datos comparte los 500.000 comandos/mes con las listas compartidas): 1.500 consultas y 500 copias nuevas al día; pasados, ese día no se usa. Peor caso ~7.000 comandos/día; una consulta con copia cuesta 2 comandos.
+- Mercadona sigue viendo el mismo User-Agent y las mismas rutas; solo se guardan respuestas públicas del catálogo, nada de personas.
+- Pruebas: `proxytest/dbcache.mjs` 31/31 (1.000 consultas de 20 categorías → 20 peticiones a Mercadona; 10 a la vez → 1), proxy 5 pruebas, lista 50/50, seguridad 14/14, e2e30.
+- No medido: cuántas peticiones llegan de verdad a Mercadona en producción (sin acceso a los registros de Vercel).

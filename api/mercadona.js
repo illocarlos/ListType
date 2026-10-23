@@ -1,6 +1,7 @@
 // Proxy de solo lectura hacia el catálogo de la tienda online de Mercadona.
 // Existe solo por CORS: el navegador no puede llamar a Mercadona desde este dominio.
-// No guarda nada. Solo deja pasar rutas concretas (categorías y código postal) y cachea en el CDN de Vercel.
+// No guarda nada de personas. Solo deja pasar rutas concretas (categorías y código postal), cachea en el CDN de Vercel
+// y, si hay base de datos conectada, guarda una copia compartida de las respuestas del catálogo (ver _catalogcache.js).
 // Mercadona no ofrece API pública: esto puede dejar de funcionar en cualquier momento.
 //
 // Uso: /api/mercadona?path=categories/&lang=es&wh=svq1
@@ -11,6 +12,8 @@
 //      /api/mercadona?path=geo&lat=37.480&lon=-5.980 -> código postal de una ubicación (OpenStreetMap)
 //      /api/mercadona?path=status -> 200 si Mercadona responde, 503 si rechaza (para un vigilante externo)
 // El catálogo exige almacén (wh). Cualquier parámetro que no sea de la ruta se rechaza con 400.
+
+import { FRESH_MS, giveTurn, isConfigured, keyFor, readCopy, sleep, takeTurn, writeCopy } from './_catalogcache.js';
 
 const UPSTREAM = 'https://tienda.mercadona.es/api/';
 // Solo lectura del catálogo público de la tienda: categorías, rebajas, novedades, ficha y parecidos.
@@ -197,6 +200,25 @@ function routeOf(path) {
     return 'catalog';
 }
 
+// Responde con la copia de la base de datos. El CDN la guarda solo lo que le queda de frescura (así la
+// edad total nunca pasa de 12 h + 1 h, igual que antes); una copia vieja solo 1 minuto.
+function sendCopy(res, copy, old) {
+    const age = Date.now() - copy.fetchedAt;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('x-listtype-proxy', '1');
+    res.setHeader('x-listtype-source', 'db');
+    res.setHeader('x-listtype-fetched-at', String(copy.fetchedAt));
+    res.setHeader('Cache-Control', old
+        ? 'public, s-maxage=60'
+        : `public, s-maxage=${Math.max(60, Math.floor((FRESH_MS - age) / 1000))}, stale-while-revalidate=3600, stale-if-error=86400`);
+    return res.status(200).send(copy.body);
+}
+
+function sendOldCopy(res, copy, path, why) {
+    console.warn(`[CATALOGO_COPIA_VIEJA] path=${path} edad=${Math.round((Date.now() - copy.fetchedAt) / 60000)}min motivo=${why}`);
+    return sendCopy(res, copy, true);
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         res.setHeader('Allow', 'GET');
@@ -242,13 +264,50 @@ export default async function handler(req, res) {
     const lang = req.query.lang === undefined ? 'es' : single(req.query.lang);
     if (!wh || !WH_RE.test(wh) || lang !== 'es') return sendError(res, 400, 'invalid_params');
 
+    // Copia compartida en la base de datos (si está conectada): el primero de cada almacén va a Mercadona
+    // y los demás reciben su copia. Si la base de datos falla, todo sigue como antes.
+    const cacheKey = keyFor(wh, path);
+    let dbUp = isConfigured();
+    let copy = null;
+    if (dbUp) {
+        const read = await readCopy(cacheKey);
+        if (read.down) dbUp = false;
+        else copy = read.copy;
+    }
+    if (copy && Date.now() - copy.fetchedAt < FRESH_MS) return sendCopy(res, copy, false);
+
+    let myTurn = false;
     try {
+        if (dbUp) {
+            const turn = await takeTurn(cacheKey);
+            if (turn === null) dbUp = false;
+            else if (turn) myTurn = true;
+            else {
+                // Otro móvil ya está pidiéndola a Mercadona: con una copia vieja se sirve esa; si no, se espera la nueva
+                if (copy) return sendCopy(res, copy, true);
+                for (let i = 0; i < 6; i++) {
+                    await sleep(800);
+                    const again = await readCopy(cacheKey, false);
+                    if (again.down) break;
+                    if (again.copy && Date.now() - again.copy.fetchedAt < FRESH_MS) return sendCopy(res, again.copy, false);
+                }
+                // Nadie la entregó a tiempo (rarísimo): se pide por cuenta propia, como antes
+            }
+        }
+
         const upstream = await fetchUpstream(buildUrl(path, wh));
 
         if (!upstream.ok) {
-            // sendRefusal ya deja la marca [MERCADONA_RECHAZO] en los registros
-            if (isRefusalStatus(upstream.status)) return sendRefusal(res, upstream.status, path);
+            if (isRefusalStatus(upstream.status)) {
+                // Mercadona rechaza: no se insiste. Con copia guardada se sigue sirviendo esa.
+                if (copy) {
+                    console.warn(`[MERCADONA_RECHAZO] status=${upstream.status} path=${path}`);
+                    return sendOldCopy(res, copy, path, `rechazo ${upstream.status}`);
+                }
+                return sendRefusal(res, upstream.status, path);
+            }
             // "No existe en tu zona" no cambia de un minuto a otro: se guarda 10 min para no repetir la pregunta
+            if (upstream.status !== 404 && copy) return sendOldCopy(res, copy, path, `error ${upstream.status}`);
             return sendError(res, upstream.status, 'upstream_error', { upstreamStatus: upstream.status }, upstream.status === 404 ? 600 : 0);
         }
 
@@ -258,13 +317,16 @@ export default async function handler(req, res) {
         // la app se quedaría sin catálogo 12 h para todo el mundo.
         if (!isJsonData(body)) {
             console.warn(`[MERCADONA_NO_JSON] path=${path} type=${upstream.headers.get('content-type') || '?'}`);
+            if (copy) return sendOldCopy(res, copy, path, 'no es JSON');
             return sendError(res, 502, 'upstream_not_json', { upstreamStatus: upstream.status });
         }
+        const fetchedAt = Date.now();
+        if (dbUp) await writeCopy(cacheKey, body, fetchedAt);
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('x-listtype-proxy', '1');
         // Hora a la que se sacó de Mercadona. El CDN la guarda con la copia, así el móvil sabe la edad
         // real del precio aunque reciba una copia de hace horas (o la de stale-if-error).
-        res.setHeader('x-listtype-fetched-at', String(Date.now()));
+        res.setHeader('x-listtype-fetched-at', String(fetchedAt));
         // Productos y precios: el CDN de Vercel guarda la copia 12 h y solo puede entregar una copia
         // caducada durante 1 h más mientras busca la nueva. Con la caché de 24 h del móvil, el retraso
         // máximo de un precio queda en día y medio aproximadamente, con la mitad de peticiones que a 6 h.
@@ -273,6 +335,9 @@ export default async function handler(req, res) {
         res.setHeader('Cache-Control', 'public, s-maxage=43200, stale-while-revalidate=3600, stale-if-error=86400');
         return res.status(200).send(body);
     } catch (error) {
+        if (copy) return sendOldCopy(res, copy, path, String(error?.name || error));
         return sendError(res, 502, 'upstream_unreachable', { detail: String(error?.name || error) });
+    } finally {
+        if (myTurn) await giveTurn(cacheKey);
     }
 }
