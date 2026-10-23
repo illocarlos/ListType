@@ -167,6 +167,13 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
                 doc.setDrawColor(40);
                 doc.setLineWidth(0.5);
                 doc.rect(x + PAD, lineY, CHECKBOX, CHECKBOX);
+                // Ya en el carro (tachado en la app): la casilla sale marcada
+                if (item.done) {
+                    doc.setLineWidth(0.8);
+                    doc.line(x + PAD + 0.8, lineY + CHECKBOX * 0.55, x + PAD + CHECKBOX * 0.4, lineY + CHECKBOX - 0.8);
+                    doc.line(x + PAD + CHECKBOX * 0.4, lineY + CHECKBOX - 0.8, x + PAD + CHECKBOX - 0.6, lineY + 0.8);
+                    doc.setLineWidth(0.5);
+                }
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(NAME_SIZE);
                 doc.text(item.byWeight ? `${item.quantity} kg aprox.` : `x${item.quantity}`, x + PAD + CHECKBOX + 2, lineY + CHECKBOX - 1.5);

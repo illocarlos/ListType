@@ -11,7 +11,8 @@ function listAsText(order: orderItem[]): string {
         const amount = item.byWeight ? `${item.quantity} kg aprox.` : `${item.quantity} ×`;
         // Lo de otra tienda lleva la tienda detrás: "☐ 1 × Pan de pueblo · Panadería"
         const store = item.store ? ` · ${item.store}` : "";
-        return `☐ ${amount} ${item.name}${store}${price}`;
+        // ☑ lo que ya está en el carro
+        return `${item.done ? "☑" : "☐"} ${amount} ${item.name}${store}${price}`;
     });
     const total = order.reduce((sum, item) => sum + item.price * item.quantity, 0);
     return [

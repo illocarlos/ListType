@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, Heart, LayoutGrid, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, CheckCheck, Heart, LayoutGrid, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
@@ -30,6 +30,9 @@ import BackToTop from "./components/BackToTop.tsx"
 import { MoveBanner, MoveImport, MoveResult } from "./components/Move.tsx"
 import AddStoreProduct from "./components/AddStoreProduct.tsx"
 import LoadingProducts from "./components/LoadingProducts.tsx"
+import { JoinPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
+import { takeShareFromHash } from "./helpers/sync"
+import type { JoinMode } from "./hooks/useList"
 import { isNewHost, isOldHost } from "./helpers/move"
 
 type Source = "todo" | "favoritos" | "mercadona"
@@ -94,7 +97,7 @@ const itemDetail = (item: listItem) =>
   [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
-  const { order, addItem, decreaseItem, removeItem, refreshOrder, clearOrder, restoreOrder } = useList();
+  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, leave } = useList();
   const { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
@@ -569,12 +572,14 @@ function App() {
 
   // Vaciar la lista (tras la compra) con "Deshacer": sin ventana de confirmar, pero se puede recuperar
   // mientras no se apunte nada nuevo
-  const [cleared, setCleared] = useState<orderItem[] | null>(null);
+  // Lo último quitado de golpe ("Vaciar la lista" o "Quitar lo del carro"), para poder deshacerlo.
+  // Deja de ofrecerse en cuanto la lista vuelve a crecer (se apunta algo, aquí o en otro móvil)
+  const [cleared, setCleared] = useState<{ items: orderItem[], kind: "all" | "done", remaining: number } | null>(null);
   const undoRef = useRef<HTMLButtonElement>(null);
   const clearRef = useRef<HTMLButtonElement>(null);
   const focusAfterUndo = useRef<boolean>(false);
   useEffect(() => {
-    if (cleared && order.length > 0) setCleared(null);
+    if (cleared && order.length > cleared.remaining) setCleared(null);
   }, [cleared, order.length]);
   useEffect(() => {
     if (cleared) undoRef.current?.focus();
@@ -586,16 +591,66 @@ function App() {
   }, [order.length]);
   const clearList = () => {
     if (order.length === 0) return;
-    setCleared(order);
+    setCleared({ items: order, kind: "all", remaining: 0 });
     clearOrder();
     announce(`Lista vaciada: ${order.length} ${order.length === 1 ? "producto" : "productos"}. Puedes deshacerlo.`);
+  };
+  // Después de pasar por caja: fuera lo que ya está en el carro, se queda lo que faltó
+  const inCartCount = order.filter(item => item.done).length;
+  const removeInCart = () => {
+    const inCart = order.filter(item => item.done);
+    if (inCart.length === 0) return;
+    setCleared({ items: inCart, kind: "done", remaining: order.length - inCart.length });
+    for (const item of inCart) removeItem(item.id);
+    announce(`Quitado lo del carro: ${inCart.length} ${inCart.length === 1 ? "producto" : "productos"}. Puedes deshacerlo.`);
   };
   const undoClear = () => {
     if (!cleared) return;
     focusAfterUndo.current = true;
-    restoreOrder(cleared);
+    restoreOrder(cleared.items);
     setCleared(null);
     announce("Lista recuperada.");
+  };
+  const toggleDone = (item: orderItem) => {
+    setDone(item.id, !item.done);
+    announce(item.done ? `${item.name}: vuelve a faltar.` : `${item.name}: en el carro.`);
+  };
+
+  // ---------- Lista compartida ----------
+
+  const [shareOpen, setShareOpen] = useState<boolean>(false);
+  const closeShare = useCallback(() => setShareOpen(false), []);
+  // Invitación: al abrir un enlace "…/#lista=código" (al arrancar o con la app ya abierta) o al pegarlo
+  const [invite, setInvite] = useState<string | null>(null);
+  const closeInvite = useCallback(() => setInvite(null), []);
+  useEffect(() => {
+    const read = () => {
+      const code = takeShareFromHash();
+      if (code) setInvite(code);
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  const shareList = async () => {
+    const id = await share();
+    announce("Lista compartida. Envía el enlace a quien quieras.");
+    return id;
+  };
+  const joinList = async (mode: JoinMode) => {
+    if (!invite) return;
+    const count = await join(invite, mode);
+    setInvite(null);
+    setShareOpen(false);
+    announce(`Te has unido a la lista compartida: ${count} ${count === 1 ? "producto" : "productos"}.`);
+  };
+  const leaveList = () => {
+    leave();
+    announce("Has dejado de compartir. Tu lista sigue en este móvil.");
+  };
+  const joinFromPaste = (code: string) => {
+    setShareOpen(false);
+    setInvite(code);
   };
 
   const listPanel = (withHeader: boolean) => (
@@ -606,11 +661,19 @@ function App() {
           <span className="text-sm text-muted tabular">{lineCount} {lineCount === 1 ? "producto" : "productos"}</span>
         </div>
       )}
+      <ShareRow shared={sharedListId !== null} status={syncStatus} onOpen={() => setShareOpen(true)} />
       <div className="flex-1 overflow-y-auto">
-        {cleared && order.length === 0 && (
+        {syncStatus === "gone" && (
+          <p className="m-4 mb-0 rounded-md bg-surface-sunk p-3 text-base" role="status">
+            La lista compartida ya no existe (se borra a los 90 días sin cambios). Tu lista sigue en este móvil.
+          </p>
+        )}
+        {cleared && (
           <div className="m-4 mb-0 flex flex-wrap items-center justify-between gap-3 rounded-md bg-highlight p-3 text-on-highlight">
             <p className="text-base font-semibold">
-              Has vaciado la lista ({cleared.length} {cleared.length === 1 ? "producto" : "productos"}).
+              {cleared.kind === "all"
+                ? `Has vaciado la lista (${cleared.items.length} ${cleared.items.length === 1 ? "producto" : "productos"}).`
+                : `Has quitado lo del carro (${cleared.items.length} ${cleared.items.length === 1 ? "producto" : "productos"}).`}
             </p>
             <button
               ref={undoRef}
@@ -629,10 +692,21 @@ function App() {
           decreaseItem={decreaseInList}
           removeItem={removeAnnounced}
           onOpenDetails={openDetail}
+          onToggleDone={toggleDone}
         />
         {/* Al final de la lista, lejos del PDF: después de la compra se vacía de una vez */}
         {order.length > 0 && (
-          <div className="px-4 pb-4 pt-1">
+          <div className="px-4 pb-4 pt-1 flex flex-wrap gap-x-2">
+            {inCartCount > 0 && (
+              <button
+                type="button"
+                onClick={removeInCart}
+                className="h-11 px-2 inline-flex items-center gap-2 rounded-md text-base font-semibold text-accent-strong hover:bg-surface-sunk"
+              >
+                <CheckCheck size={20} aria-hidden="true" />
+                Quitar lo del carro ({inCartCount})
+              </button>
+            )}
             <button
               ref={clearRef}
               type="button"
@@ -1077,6 +1151,29 @@ function App() {
       </Sheet>
 
       {/* Ficha del producto: ingredientes, alérgenos, historial y parecidos más baratos */}
+      <Sheet open={shareOpen} title="Compartir la lista" onClose={closeShare}>
+        <SharePanel
+          sharedId={sharedListId}
+          status={syncStatus}
+          itemCount={order.length}
+          onShare={shareList}
+          onLeave={leaveList}
+          onJoinCode={joinFromPaste}
+        />
+      </Sheet>
+
+      <Sheet open={invite !== null} title="Lista compartida" onClose={closeInvite}>
+        {invite && (
+          <JoinPanel
+            inviteId={invite}
+            currentSharedId={sharedListId}
+            localCount={order.length}
+            onJoin={joinList}
+            onCancel={closeInvite}
+          />
+        )}
+      </Sheet>
+
       <Sheet open={detailItem !== null} title="Ficha del producto" onClose={closeDetail} variant="full">
         {detailItem && (
           <ProductSheet
