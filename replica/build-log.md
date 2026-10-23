@@ -401,3 +401,12 @@ Pedido por el dueño: que en la lista compartida se vea el nombre de quien añad
 - El servidor guarda el nombre como un campo más del producto (máximo 30 caracteres, solo texto). Es el único dato de una persona que se guarda, y solo si lo escribe.
 - Un nombre con código se pinta como texto (React lo escapa).
 - Pruebas: 14/14 nuevas con dos móviles simulados + servidor 50/50 + regresión completa.
+
+## 2026-10-23 · Nombre obligatorio en la lista compartida
+
+Pedido por el dueño: que el nombre sea obligatorio y que a quien entró antes sin nombre le salte la petición.
+
+- Crear el enlace, unirse (por enlace o pegándolo) y guardar el nombre ya no dejan seguir con el nombre vacío (ni con solo espacios). Avisa en el campo y el foco va a él.
+- Quien ya estaba en una lista compartida sin nombre ve al abrir la app la ventana **«Ponte un nombre»**. No se puede cerrar: ni botón Cerrar, ni Escape, ni tocar fuera, ni el botón atrás. La única otra salida es «Prefiero dejar de compartir» (con confirmación).
+- `Sheet` tiene una opción `dismissible={false}` para esto: si se pulsa atrás, vuelve a poner su paso en el historial.
+- Pruebas: e2e31 29/29 + regresión completa.
