@@ -29,6 +29,7 @@ import Collapsible from "./components/Collapsible.tsx"
 import BackToTop from "./components/BackToTop.tsx"
 import { MoveBanner, MoveImport, MoveResult } from "./components/Move.tsx"
 import AddStoreProduct from "./components/AddStoreProduct.tsx"
+import LoadingProducts from "./components/LoadingProducts.tsx"
 import { isNewHost, isOldHost } from "./helpers/move"
 
 type Source = "todo" | "favoritos" | "mercadona"
@@ -235,6 +236,11 @@ function App() {
   const showFavorites = source !== "mercadona";
   const showMercadona = source !== "favoritos";
   const loadingCatalog = mercadona.indexState === "running" || mercadona.groupsState === "loading";
+  // Buscando solo en favoritos no hay que esperar a Mercadona: están en el móvil
+  const waitingCatalog = showMercadona && loadingCatalog;
+  // Novedades y rebajas: "idle" es el instante antes de empezar a pedirlas (también cuenta como cargando)
+  const homeLoading = (kind: "new-arrivals" | "price-drops") =>
+    mercadona.homeState[kind] === "loading" || mercadona.homeState[kind] === "idle";
   const noResults = searching
     && (!showFavorites || favoriteResults.length === 0)
     && (!showMercadona || mercadonaResults.length === 0);
@@ -445,7 +451,7 @@ function App() {
 
   // Lo que oye quien usa lector de pantalla al buscar
   const resultsAnnouncement = !searching ? ""
-    : noResults ? (loadingCatalog ? "Buscando…" : "No hay resultados")
+    : noResults ? (waitingCatalog ? "Buscando…" : "No hay resultados")
     : `${(showFavorites ? favoriteResults.length : 0) + (showMercadona ? mercadonaResults.length : 0)} resultados`;
 
   const missingAisles = mercadona.indexProgress
@@ -776,16 +782,18 @@ function App() {
                 </div>
               )}
 
-              {noResults && !mercadonaDown && (
+              {noResults && !mercadonaDown && (waitingCatalog ? (
+                <LoadingProducts
+                  announce={false}
+                  title="Buscando en Mercadona…"
+                  hint={mercadona.indexProgress ? undefined : "Preparando los productos de tu zona. La primera vez al día tarda un poco."}
+                />
+              ) : (
                 <div className="rounded-md bg-surface p-6 text-center">
-                  <p className="font-semibold">
-                    {loadingCatalog ? "Buscando…" : `No hay nada que coincida con «${deferredQuery.trim()}».`}
-                  </p>
-                  {!loadingCatalog && (
-                    <p className="text-sm text-muted mt-1">Prueba con otra palabra o con menos letras.</p>
-                  )}
+                  <p className="font-semibold">{`No hay nada que coincida con «${deferredQuery.trim()}».`}</p>
+                  <p className="text-sm text-muted mt-1">Prueba con otra palabra o con menos letras.</p>
                 </div>
-              )}
+              ))}
             </div>
           ) : (
             <div>
@@ -833,19 +841,17 @@ function App() {
 
                   {catalogStatus}
 
-                  {novelties.length === 0 ? (
+                  {novelties.length === 0 && homeLoading("new-arrivals") ? (
+                    <LoadingProducts title="Buscando novedades…" hint="Pidiendo a Mercadona los productos nuevos de tu zona." />
+                  ) : novelties.length === 0 ? (
                     <div className="rounded-md bg-surface p-6 text-center">
                       <Sparkles size={28} aria-hidden="true" className="mx-auto text-accent" />
-                      <p className="mt-2 font-semibold">
-                        {mercadona.homeState["new-arrivals"] === "loading" ? "Buscando novedades…" : "Ahora mismo no hay novedades"}
+                      <p className="mt-2 font-semibold">Ahora mismo no hay novedades</p>
+                      <p className="text-sm text-muted mt-1">
+                        {mercadona.homeState["new-arrivals"] === "error"
+                          ? "No se han podido cargar las novedades de Mercadona. Inténtalo más tarde."
+                          : "Saldrán aquí en cuanto Mercadona presente productos nuevos."}
                       </p>
-                      {mercadona.homeState["new-arrivals"] !== "loading" && (
-                        <p className="text-sm text-muted mt-1">
-                          {mercadona.homeState["new-arrivals"] === "error"
-                            ? "No se han podido cargar las novedades de Mercadona. Inténtalo más tarde."
-                            : "Saldrán aquí en cuanto Mercadona presente productos nuevos."}
-                        </p>
-                      )}
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -869,12 +875,12 @@ function App() {
                   </div>
                   <p className="text-sm text-muted mb-4">Solo productos con el precio de antes comprobado: sale tachado junto al descuento.</p>
 
-                  {drops.length === 0 ? (
+                  {drops.length === 0 && homeLoading("price-drops") ? (
+                    <LoadingProducts title="Buscando rebajas…" hint="Pidiendo a Mercadona los precios rebajados de tu zona." />
+                  ) : drops.length === 0 ? (
                     <div className="rounded-md bg-surface p-6 text-center">
                       <BadgePercent size={28} aria-hidden="true" className="mx-auto text-accent" />
-                      <p className="mt-2 font-semibold">
-                        {mercadona.homeState["price-drops"] === "loading" ? "Buscando rebajas…" : "Ahora mismo no hay rebajas"}
-                      </p>
+                      <p className="mt-2 font-semibold">Ahora mismo no hay rebajas</p>
                       {mercadona.homeState["price-drops"] === "error" && (
                         <p className="text-sm text-muted mt-1">No se han podido cargar las rebajas de Mercadona. Inténtalo más tarde.</p>
                       )}

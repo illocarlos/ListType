@@ -66,9 +66,12 @@ export default function useMercadona() {
         await Promise.all([load("price-drops", setPriceDrops), load("new-arrivals", setNewArrivals)]);
     }, []);
 
+    // Zona nueva: las listas de la anterior no valen y se vuelven a pedir.
+    // Se marcan como "cargando" (si se quedaran en "listo", se vería "no hay novedades" mientras llegan).
     useEffect(() => {
         setPriceDrops([]);
         setNewArrivals([]);
+        setHomeState({ "price-drops": "loading", "new-arrivals": "loading" });
         loadHomeLists(wh);
     }, [wh, loadHomeLists]);
 

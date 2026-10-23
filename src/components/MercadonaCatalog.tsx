@@ -5,6 +5,7 @@ import type { LoadState } from "../hooks/useMercadona";
 import type { listItem, MercadonaAisle, MercadonaGroup, MercadonaProduct } from "../types/types";
 import ProductRow from "./ProductRow";
 import Collapsible from "./Collapsible";
+import LoadingProducts from "./LoadingProducts";
 
 type MercadonaCatalogProps = {
     wh: string,
@@ -97,13 +98,7 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
                     </button>
                     <h3 ref={aisleTitleRef} tabIndex={-1} className="text-xl font-bold mb-3 focus:outline-none focus-visible:outline-highlight">{aisle.name}</h3>
 
-                    {productsState === "loading" && (
-                        <ul className="space-y-2" aria-busy="true">
-                            {Array.from({ length: 5 }).map((_, index) => (
-                                <li key={index} className="h-[72px] rounded-md bg-surface-sunk animate-pulse" />
-                            ))}
-                        </ul>
-                    )}
+                    {productsState === "loading" && <LoadingProducts title="Cargando productos del pasillo…" rows={5} />}
 
                     {productsState === "error" && (
                         <div className="rounded-md bg-surface p-4">
@@ -150,11 +145,14 @@ const MercadonaCatalog = ({ wh, groups, groupsState, groupsError, onRetryGroups,
             ) : (
                 <div>
                     {groupsState === "loading" && (
-                        <ul className="space-y-2" aria-busy="true">
-                            {Array.from({ length: 6 }).map((_, index) => (
-                                <li key={index} className="h-12 rounded-md bg-surface-sunk animate-pulse" />
-                            ))}
-                        </ul>
+                        <div aria-busy="true" data-loading>
+                            <p role="status" className="sr-only">Cargando pasillos de Mercadona…</p>
+                            <ul aria-hidden="true" className="space-y-2">
+                                {Array.from({ length: 6 }).map((_, index) => (
+                                    <li key={index} className="h-12 rounded-md bg-surface-sunk motion-safe:animate-pulse" />
+                                ))}
+                            </ul>
+                        </div>
                     )}
 
                     {groupsState === "error" && (
