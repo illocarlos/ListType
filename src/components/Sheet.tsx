@@ -8,6 +8,8 @@ type SheetProps = {
     children: React.ReactNode,
     // "bottom": hoja inferior en móvil y diálogo centrado en escritorio; "full": pantalla completa en móvil
     variant?: "bottom" | "full",
+    // false: no se puede cerrar (sin botón Cerrar, sin Escape, sin tocar fuera, y "atrás" no la quita)
+    dismissible?: boolean,
 }
 
 // Diálogos abiertos, el último arriba: solo ese atiende al teclado (p. ej. la ficha abierta desde la lista)
@@ -32,10 +34,12 @@ if (typeof window !== "undefined") {
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 // Diálogo accesible: el foco entra al abrir, no se escapa con el tabulador y vuelve al botón que lo abrió
-const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProps) => {
+const Sheet = ({ open, title, onClose, children, variant = "bottom", dismissible = true }: SheetProps) => {
     const panelRef = useRef<HTMLDivElement>(null);
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
+    const dismissibleRef = useRef(dismissible);
+    dismissibleRef.current = dismissible;
 
     // Historial: un paso por diálogo abierto
     useEffect(() => {
@@ -43,6 +47,12 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProp
         let closedByBack = false;
         const owner = {
             close: () => {
+                // Obligatoria: "atrás" no la quita; se vuelve a poner su paso en el historial
+                if (!dismissibleRef.current) {
+                    historyOwners.push(owner);
+                    window.history.pushState({ sheet: true }, "");
+                    return;
+                }
                 closedByBack = true;
                 onCloseRef.current();
             },
@@ -72,7 +82,7 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProp
         const onKey = (event: KeyboardEvent) => {
             if (openSheets[openSheets.length - 1] !== self) return;
             if (event.key === "Escape") {
-                onClose();
+                if (dismissibleRef.current) onClose();
                 return;
             }
             if (event.key !== "Tab" || !panel) return;
@@ -115,7 +125,7 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProp
 
     return (
         <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-text/40" onClick={onClose} aria-hidden="true" />
+            <div className="absolute inset-0 bg-text/40" onClick={dismissible ? onClose : undefined} aria-hidden="true" />
             <div
                 ref={panelRef}
                 role="dialog"
@@ -126,14 +136,14 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProp
             >
                 <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
                     <h2 id={titleId} className="text-lg font-bold">{title}</h2>
-                    <button
+                    {dismissible && <button
                         type="button"
                         onClick={onClose}
                         className="h-11 px-3 inline-flex items-center gap-1.5 rounded-pill text-base font-semibold hover:bg-surface-sunk"
                     >
                         <X size={20} aria-hidden="true" />
                         Cerrar
-                    </button>
+                    </button>}
                 </div>
                 <div className="flex-1 overflow-y-auto">
                     {children}

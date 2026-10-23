@@ -85,29 +85,43 @@ const PasteLink = ({ onCode }: { onCode: (id: string) => void }) => {
     );
 };
 
-// "Tu nombre": con él se firma lo que apuntas en la lista compartida ("Apuntado por Ana")
-const NameField = ({ value, onChange }: { value: string, onChange: (text: string) => void }) => {
+// "Tu nombre" (obligatorio en la lista compartida): con él se firma lo que apuntas ("Apuntado por Ana")
+const NameField = ({ value, onChange, error, inputRef }: {
+    value: string,
+    onChange: (text: string) => void,
+    error?: string,
+    inputRef?: React.Ref<HTMLInputElement>,
+}) => {
     const inputId = useId();
     const helpId = useId();
+    const errorId = useId();
     return (
         <div className="mt-4">
             <label htmlFor={inputId} className="block text-base font-semibold">Tu nombre</label>
-            <p id={helpId} className="text-sm text-muted">Así los demás ven quién ha apuntado cada cosa. Puedes dejarlo vacío.</p>
+            <p id={helpId} className="text-sm text-muted">Así los demás ven quién ha apuntado cada cosa.</p>
             <input
+                ref={inputRef}
                 id={inputId}
                 type="text"
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 maxLength={30}
+                required
+                aria-required="true"
                 autoComplete="given-name"
                 autoCapitalize="words"
                 placeholder="Por ejemplo: Ana"
-                aria-describedby={helpId}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? `${errorId} ${helpId}` : helpId}
                 className="mt-1 h-12 w-full rounded-md border-2 border-border-input bg-surface px-3 text-base focus:border-accent focus:outline-none"
             />
+            {error && <p id={errorId} role="alert" className="mt-2 text-base font-semibold text-danger">{error}</p>}
         </div>
     );
 };
+
+const NAME_MISSING = "Escribe tu nombre para seguir.";
+const hasName = (text: string) => text.trim().length > 0;
 
 type SharePanelProps = {
     sharedId: string | null,
@@ -125,6 +139,18 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
     const [busy, setBusy] = useState<boolean>(false);
     const [name, setName] = useState<string>(myName);
     const [nameSaved, setNameSaved] = useState<boolean>(false);
+    const [nameError, setNameError] = useState<string>("");
+    const nameRef = useRef<HTMLInputElement>(null);
+    // Sin nombre no se sigue: aviso en el campo y el foco va a él
+    const requireName = () => {
+        if (hasName(name)) {
+            setNameError("");
+            return true;
+        }
+        setNameError(NAME_MISSING);
+        nameRef.current?.focus();
+        return false;
+    };
     const [error, setError] = useState<string>("");
     const [copied, setCopied] = useState<boolean>(false);
     const [confirmLeave, setConfirmLeave] = useState<boolean>(false);
@@ -141,6 +167,7 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
     }, [sharedId]);
 
     const create = async () => {
+        if (!requireName()) return;
         setBusy(true);
         setError("");
         try {
@@ -166,7 +193,10 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
                     <li>Se guardan en internet solo los productos{itemCount ? ` (ahora ${itemCount})` : ""} y el nombre que pongas. Si nadie la toca en 90 días, se borra.</li>
                     <li>Tus favoritos siguen siendo solo tuyos.</li>
                 </ul>
-                <NameField value={name} onChange={setName} />
+                <NameField value={name} onChange={text => {
+                    setName(text);
+                    if (nameError && hasName(text)) setNameError("");
+                }} error={nameError} inputRef={nameRef} />
                 <button
                     type="button"
                     onClick={create}
@@ -178,7 +208,7 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
                 </button>
                 {error && <p role="alert" className="mt-2 text-base font-semibold text-danger">{error}</p>}
                 <PasteLink onCode={code => {
-                    onName(name);
+                    if (hasName(name)) onName(name);
                     onJoinCode(code);
                 }} />
             </div>
@@ -236,8 +266,10 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
 
             <form
                 className="mt-2"
+                noValidate
                 onSubmit={event => {
                     event.preventDefault();
+                    if (!requireName()) return;
                     onName(name);
                     setNameSaved(true);
                 }}
@@ -245,7 +277,8 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
                 <NameField value={name} onChange={text => {
                     setName(text);
                     setNameSaved(false);
-                }} />
+                    if (nameError && hasName(text)) setNameError("");
+                }} error={nameError} inputRef={nameRef} />
                 <button type="submit" className="mt-2 h-11 rounded-md bg-accent-soft px-4 text-base font-semibold text-on-accent-soft">
                     Guardar nombre
                 </button>
@@ -288,7 +321,7 @@ export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShar
                 )}
             </div>
             <PasteLink onCode={code => {
-                onName(name);
+                if (hasName(name)) onName(name);
                 onJoinCode(code);
             }} />
         </div>
@@ -310,7 +343,15 @@ export const JoinPanel = ({ inviteId, currentSharedId, localCount, myName, onNam
     const [busy, setBusy] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
     const [name, setName] = useState<string>(myName);
+    const [nameError, setNameError] = useState<string>("");
+    const nameRef = useRef<HTMLInputElement>(null);
     const run = async (mode: JoinMode) => {
+        if (!hasName(name)) {
+            setNameError(NAME_MISSING);
+            nameRef.current?.focus();
+            return;
+        }
+        setNameError("");
         setBusy(true);
         setError("");
         onName(name);
@@ -341,7 +382,10 @@ export const JoinPanel = ({ inviteId, currentSharedId, localCount, myName, onNam
             ) : localCount > 0 ? (
                 <p className="mt-2 text-base">Ahora tienes {localCount} {localCount === 1 ? "producto" : "productos"} en tu lista.</p>
             ) : null}
-            <NameField value={name} onChange={setName} />
+            <NameField value={name} onChange={text => {
+                setName(text);
+                if (nameError && hasName(text)) setNameError("");
+            }} error={nameError} inputRef={nameRef} />
             <div className="mt-4 space-y-2">
                 {currentSharedId ? (
                     <button type="button" disabled={busy} onClick={() => run("replace")} className={primary}>
@@ -365,5 +409,64 @@ export const JoinPanel = ({ inviteId, currentSharedId, localCount, myName, onNam
             </div>
             {error && <p role="alert" className="mt-3 text-base font-semibold text-danger">{error}</p>}
         </div>
+    );
+};
+
+// Ya estás en una lista compartida pero sin nombre (te uniste antes de que se pidiera): hay que ponerlo.
+// Si no quieres, la otra salida es dejar de compartir en este móvil.
+export const NameRequiredPanel = ({ onName, onLeave }: { onName: (text: string) => void, onLeave: () => void }) => {
+    const [name, setName] = useState<string>("");
+    const [nameError, setNameError] = useState<string>("");
+    const [confirmLeave, setConfirmLeave] = useState<boolean>(false);
+    const nameRef = useRef<HTMLInputElement>(null);
+    // El foco al campo, después de que la ventana se haya colocado (ella se lleva el foco al abrirse)
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(() => nameRef.current?.focus());
+        return () => window.cancelAnimationFrame(frame);
+    }, []);
+    const save = (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!hasName(name)) {
+            setNameError(NAME_MISSING);
+            nameRef.current?.focus();
+            return;
+        }
+        onName(name);
+    };
+    return (
+        <form onSubmit={save} noValidate className="p-4">
+            <p className="text-base">Ahora la lista compartida enseña quién apunta cada cosa. Para seguir en ella, pon tu nombre.</p>
+            <NameField value={name} onChange={text => {
+                setName(text);
+                if (nameError && hasName(text)) setNameError("");
+            }} error={nameError} inputRef={nameRef} />
+            <button type="submit" className="mt-4 w-full h-12 rounded-md bg-accent text-on-accent text-base font-semibold hover:bg-accent-strong">
+                Guardar y seguir
+            </button>
+            <div className="mt-6 border-t border-border pt-4">
+                {confirmLeave ? (
+                    <div className="rounded-md bg-surface-sunk p-3">
+                        <p className="text-base">Tu lista se queda en este móvil tal como está, y los demás siguen con la suya.</p>
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            <button type="button" onClick={onLeave} className="h-12 flex-1 rounded-md bg-danger px-4 text-base font-semibold text-on-danger">
+                                Sí, dejar de compartir
+                            </button>
+                            <button type="button" onClick={() => setConfirmLeave(false)} className="h-12 flex-1 rounded-md border border-border bg-surface px-4 text-base font-semibold">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => setConfirmLeave(true)}
+                        className="h-11 px-2 inline-flex items-center gap-2 rounded-md text-base font-semibold text-danger hover:bg-surface-sunk"
+                    >
+                        <LogOut size={20} aria-hidden="true" />
+                        Prefiero dejar de compartir
+                    </button>
+                )}
+            </div>
+        </form>
     );
 };

@@ -30,7 +30,7 @@ import BackToTop from "./components/BackToTop.tsx"
 import { MoveBanner, MoveImport, MoveResult } from "./components/Move.tsx"
 import AddStoreProduct from "./components/AddStoreProduct.tsx"
 import LoadingProducts from "./components/LoadingProducts.tsx"
-import { JoinPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
+import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
 import { takeShareFromHash } from "./helpers/sync"
 import type { JoinMode } from "./hooks/useList"
 import { isNewHost, isOldHost } from "./helpers/move"
@@ -619,6 +619,7 @@ function App() {
   // ---------- Lista compartida ----------
 
   const [shareOpen, setShareOpen] = useState<boolean>(false);
+  const noop = useCallback(() => undefined, []);
   const closeShare = useCallback(() => setShareOpen(false), []);
   // Invitación: al abrir un enlace "…/#lista=código" (al arrancar o con la app ya abierta) o al pegarlo
   const [invite, setInvite] = useState<string | null>(null);
@@ -1162,6 +1163,11 @@ function App() {
           onLeave={leaveList}
           onJoinCode={joinFromPaste}
         />
+      </Sheet>
+
+      {/* En una lista compartida sin nombre (te uniste antes de que se pidiera): hay que ponerlo */}
+      <Sheet open={sharedListId !== null && !myName && !shareOpen && invite === null} title="Ponte un nombre" onClose={noop} dismissible={false}>
+        <NameRequiredPanel onName={setMyName} onLeave={leaveList} />
       </Sheet>
 
       <Sheet open={invite !== null} title="Lista compartida" onClose={closeInvite}>
