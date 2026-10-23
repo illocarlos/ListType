@@ -507,7 +507,10 @@ async function requestJson(url: string): Promise<Fetched> {
     let data: unknown;
     try {
         data = await response.json();
-    } catch {
+    } catch (cause) {
+        // Respuesta cortada a medias (se va la conexión, o la app se recarga con "Desliza para actualizar"):
+        // no es un rechazo de Mercadona y no debe pausar 30 minutos. Solo un JSON roto de verdad cuenta como fallo.
+        if (!(cause instanceof SyntaxError)) throw new MercadonaError(0, "red");
         const error = new MercadonaError(502);
         pauseAfter(error);
         throw error;

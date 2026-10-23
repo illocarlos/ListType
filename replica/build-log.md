@@ -324,3 +324,22 @@ Pedido por el dueño: poder guardar en favoritos productos de otro supermercado.
 - La mudanza entre direcciones ya los lleva (se copian los favoritos enteros).
 - No hay editar: para cambiar el precio hay que quitarlo y volver a crearlo.
 - Pruebas: 49/49 nuevas (formulario, validación, lista, total, PDF, WhatsApp, deshacer, buscador, recarga, 320 px, escritorio y axe) + regresión completa.
+
+## 2026-10-23 · Pantallas de carga
+
+Pedido por el dueño: que se vea una pantalla de carga si los productos aún no han llegado.
+
+- Antes, mientras Mercadona respondía, Novedades y Rebajas enseñaban un recuadro quieto con "Buscando…" (parecía que no pasaba nada) y el buscador solo "Buscando…".
+- Ahora, en cada sección que espera a Mercadona sale un aviso con un indicador que gira y unas filas "fantasma" con la forma de los productos:
+  - **Novedades** ("Buscando novedades…") y **Rebajas** ("Buscando rebajas…").
+  - **Buscador** ("Buscando en Mercadona…"). Si aún no hay barra de progreso, explica que la primera vez al día tarda un poco. En cuanto salen los primeros resultados, se quita.
+  - **Pasillo abierto** ("Cargando productos del pasillo…"). La lista de pasillos ya tenía filas de carga; ahora además se anuncia al lector de pantalla.
+- **No tapa la app entera** (decisión, no olvido): la lista y los favoritos están en el móvil y se usan sin Mercadona. Una pantalla de carga general los bloquearía justo cuando Mercadona va lenta, falla o está en pausa.
+- Arreglos que salieron al revisarlo:
+  - Buscando solo en Favoritos ya no espera a Mercadona.
+  - Al cambiar de código postal, Novedades y Rebajas decían "Ahora mismo no hay…" mientras llegaban las de la zona nueva. Ahora salen como cargando.
+- Con "reducir movimiento" activado en el móvil, no se anima nada.
+- **Fallo encontrado por la regresión** (una prueba antigua fallaba a veces): si la app se recargaba mientras llegaba una respuesta de Mercadona (por ejemplo con "Desliza para actualizar"), la respuesta cortada a medias se tomaba como un rechazo de Mercadona. La app dejaba de renovar precios durante 30 minutos.
+  - Ahora una respuesta cortada cuenta como "sin conexión" y no pausa. Una respuesta que llega entera pero con datos rotos sigue pausando, como antes.
+  - Reproducido en `main` (pausa) y comprobado tras el arreglo (sin pausa).
+- Pruebas: 24/24 nuevas (respuestas de Mercadona retenidas a mano para ver cada carga, su final y el fallo; zona nueva; reducir movimiento; respuesta cortada frente a JSON roto; escritorio; axe) + regresión completa.
