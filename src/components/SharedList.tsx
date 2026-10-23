@@ -85,18 +85,46 @@ const PasteLink = ({ onCode }: { onCode: (id: string) => void }) => {
     );
 };
 
+// "Tu nombre": con él se firma lo que apuntas en la lista compartida ("Apuntado por Ana")
+const NameField = ({ value, onChange }: { value: string, onChange: (text: string) => void }) => {
+    const inputId = useId();
+    const helpId = useId();
+    return (
+        <div className="mt-4">
+            <label htmlFor={inputId} className="block text-base font-semibold">Tu nombre</label>
+            <p id={helpId} className="text-sm text-muted">Así los demás ven quién ha apuntado cada cosa. Puedes dejarlo vacío.</p>
+            <input
+                id={inputId}
+                type="text"
+                value={value}
+                onChange={event => onChange(event.target.value)}
+                maxLength={30}
+                autoComplete="given-name"
+                autoCapitalize="words"
+                placeholder="Por ejemplo: Ana"
+                aria-describedby={helpId}
+                className="mt-1 h-12 w-full rounded-md border-2 border-border-input bg-surface px-3 text-base focus:border-accent focus:outline-none"
+            />
+        </div>
+    );
+};
+
 type SharePanelProps = {
     sharedId: string | null,
     status: SyncStatus,
     itemCount: number,
+    myName: string,
+    onName: (text: string) => void,
     onShare: () => Promise<string>,
     onLeave: () => void,
     onJoinCode: (id: string) => void,
 };
 
 // Contenido de la hoja "Compartir la lista"
-export const SharePanel = ({ sharedId, status, itemCount, onShare, onLeave, onJoinCode }: SharePanelProps) => {
+export const SharePanel = ({ sharedId, status, itemCount, myName, onName, onShare, onLeave, onJoinCode }: SharePanelProps) => {
     const [busy, setBusy] = useState<boolean>(false);
+    const [name, setName] = useState<string>(myName);
+    const [nameSaved, setNameSaved] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
     const [copied, setCopied] = useState<boolean>(false);
     const [confirmLeave, setConfirmLeave] = useState<boolean>(false);
@@ -117,6 +145,7 @@ export const SharePanel = ({ sharedId, status, itemCount, onShare, onLeave, onJo
         setError("");
         try {
             createdNow.current = true;
+            onName(name);
             await onShare();
         } catch (failure) {
             createdNow.current = false;
@@ -134,9 +163,10 @@ export const SharePanel = ({ sharedId, status, itemCount, onShare, onLeave, onJo
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-muted list-disc pl-5">
                     <li>No hace falta cuenta: quien tenga el enlace puede ver y cambiar la lista.</li>
-                    <li>Se guardan en internet solo los productos{itemCount ? ` (ahora ${itemCount})` : ""}. Si nadie la toca en 90 días, se borra.</li>
+                    <li>Se guardan en internet solo los productos{itemCount ? ` (ahora ${itemCount})` : ""} y el nombre que pongas. Si nadie la toca en 90 días, se borra.</li>
                     <li>Tus favoritos siguen siendo solo tuyos.</li>
                 </ul>
+                <NameField value={name} onChange={setName} />
                 <button
                     type="button"
                     onClick={create}
@@ -147,7 +177,10 @@ export const SharePanel = ({ sharedId, status, itemCount, onShare, onLeave, onJo
                     {busy ? "Creando el enlace…" : "Crear enlace para compartir"}
                 </button>
                 {error && <p role="alert" className="mt-2 text-base font-semibold text-danger">{error}</p>}
-                <PasteLink onCode={onJoinCode} />
+                <PasteLink onCode={code => {
+                    onName(name);
+                    onJoinCode(code);
+                }} />
             </div>
         );
     }
@@ -201,6 +234,24 @@ export const SharePanel = ({ sharedId, status, itemCount, onShare, onLeave, onJo
                 abre la app y pégalo en «¿Te han pasado un enlace?».
             </p>
 
+            <form
+                className="mt-2"
+                onSubmit={event => {
+                    event.preventDefault();
+                    onName(name);
+                    setNameSaved(true);
+                }}
+            >
+                <NameField value={name} onChange={text => {
+                    setName(text);
+                    setNameSaved(false);
+                }} />
+                <button type="submit" className="mt-2 h-11 rounded-md bg-accent-soft px-4 text-base font-semibold text-on-accent-soft">
+                    Guardar nombre
+                </button>
+                <span role="status" className="ml-3 text-base font-semibold">{nameSaved ? "Guardado." : ""}</span>
+            </form>
+
             <div className="mt-6 border-t border-border pt-4">
                 {confirmLeave ? (
                     <div className="rounded-md bg-surface-sunk p-3">
@@ -236,7 +287,10 @@ export const SharePanel = ({ sharedId, status, itemCount, onShare, onLeave, onJo
                     </button>
                 )}
             </div>
-            <PasteLink onCode={onJoinCode} />
+            <PasteLink onCode={code => {
+                onName(name);
+                onJoinCode(code);
+            }} />
         </div>
     );
 };
@@ -245,17 +299,21 @@ type JoinPanelProps = {
     inviteId: string,
     currentSharedId: string | null,
     localCount: number,
+    myName: string,
+    onName: (text: string) => void,
     onJoin: (mode: JoinMode) => Promise<void>,
     onCancel: () => void,
 };
 
 // Contenido de la hoja que sale al abrir un enlace de invitación
-export const JoinPanel = ({ inviteId, currentSharedId, localCount, onJoin, onCancel }: JoinPanelProps) => {
+export const JoinPanel = ({ inviteId, currentSharedId, localCount, myName, onName, onJoin, onCancel }: JoinPanelProps) => {
     const [busy, setBusy] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
+    const [name, setName] = useState<string>(myName);
     const run = async (mode: JoinMode) => {
         setBusy(true);
         setError("");
+        onName(name);
         try {
             await onJoin(mode);
         } catch (failure) {
@@ -283,6 +341,7 @@ export const JoinPanel = ({ inviteId, currentSharedId, localCount, onJoin, onCan
             ) : localCount > 0 ? (
                 <p className="mt-2 text-base">Ahora tienes {localCount} {localCount === 1 ? "producto" : "productos"} en tu lista.</p>
             ) : null}
+            <NameField value={name} onChange={setName} />
             <div className="mt-4 space-y-2">
                 {currentSharedId ? (
                     <button type="button" disabled={busy} onClick={() => run("replace")} className={primary}>

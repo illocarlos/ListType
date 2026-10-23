@@ -66,6 +66,8 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
 
     const row = (item: orderItem) => {
         const detail = [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ")
+        // Lista compartida: quién lo apuntó
+        const who = item.addedBy ? `Apuntado por ${item.addedBy}` : ""
         const done = Boolean(item.done)
         return (
             <li key={item.id} data-row-id={item.id} className={`flex gap-3 px-4 py-3 ${done ? "bg-surface-sunk" : ""}`}>
@@ -101,6 +103,7 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
                         </button>
                     </div>
                     {detail && <p className="text-sm text-muted break-words">{detail}</p>}
+                    {who && <p className="text-sm font-semibold text-accent-strong break-words">{who}</p>}
 
                     {done ? (
                         // En el carro: sin botones de cantidad (ya no se van a tocar), solo lo que se ha cogido

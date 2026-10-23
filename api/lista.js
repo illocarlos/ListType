@@ -1,7 +1,8 @@
 // Lista de la compra compartida entre varios móviles (como Tricount): quien tiene el enlace ve y cambia la lista.
 // No hay cuentas: el identificador de la lista (22 caracteres al azar, 128 bits) es la llave.
 // Los datos viven en Upstash Redis (plan gratis, conectado desde el Marketplace de Vercel).
-// Solo se guardan productos (nombre, precio, cantidad, si ya está en el carro): nada de la persona.
+// Solo se guardan productos (nombre, precio, cantidad, si ya está en el carro) y, si la persona lo escribe,
+// el nombre con el que firma lo que apunta. Nada más de nadie.
 //
 // Todo va por POST con JSON (el identificador nunca viaja en la dirección, que queda en los registros):
 //   { op: "ping" }                                   -> ¿está configurada la base de datos?
@@ -128,7 +129,8 @@ function cleanItem(raw) {
     // Solo fotos de Mercadona: una dirección cualquiera serviría para saber quién abre la lista
     if (typeof raw.image === 'string' && raw.image.startsWith(IMAGE_PREFIX) && raw.image.length <= 500) item.image = raw.image;
     if (typeof raw.mercadonaId === 'string' && /^[0-9]{1,8}(\.[0-9]{1,3})?$/.test(raw.mercadonaId)) item.mercadonaId = raw.mercadonaId;
-    for (const [field, max] of [['packaging', 100], ['unitPrice', 60], ['store', 40]]) {
+    // addedBy: el nombre que la persona escribe al compartir o unirse (solo eso, para ver quién apuntó qué)
+    for (const [field, max] of [['packaging', 100], ['unitPrice', 60], ['store', 40], ['addedBy', 30]]) {
         const value = text(raw[field], max);
         if (value) item[field] = value;
     }

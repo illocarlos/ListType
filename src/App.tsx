@@ -97,7 +97,7 @@ const itemDetail = (item: listItem) =>
   [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
-  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, leave } = useList();
+  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, leave, myName, setMyName } = useList();
   const { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
@@ -1156,6 +1156,8 @@ function App() {
           sharedId={sharedListId}
           status={syncStatus}
           itemCount={order.length}
+          myName={myName}
+          onName={setMyName}
           onShare={shareList}
           onLeave={leaveList}
           onJoinCode={joinFromPaste}
@@ -1168,6 +1170,8 @@ function App() {
             inviteId={invite}
             currentSharedId={sharedListId}
             localCount={order.length}
+            myName={myName}
+            onName={setMyName}
             onJoin={joinList}
             onCancel={closeInvite}
           />
