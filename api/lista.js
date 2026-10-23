@@ -31,10 +31,11 @@ function credentials() {
     for (const [urlName, tokenName] of [['KV_REST_API_URL', 'KV_REST_API_TOKEN'], ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']]) {
         if (env[urlName] && env[tokenName]) return { url: env[urlName], token: env[tokenName] };
     }
+    // Con prefijo: o se añade delante (STORAGE_KV_REST_API_URL) o sustituye a "KV" (STORAGE_REST_API_URL)
     for (const key of Object.keys(env).sort()) {
-        const match = key.match(/^(.+_)(KV_REST_API|UPSTASH_REDIS_REST)_URL$/);
+        const match = key.match(/^(.+_)(KV_REST_API|UPSTASH_REDIS_REST|REST_API)_URL$/);
         const token = match && env[`${match[1]}${match[2]}_TOKEN`];
-        if (match && env[key] && token) return { url: env[key], token };
+        if (match && /^https?:\/\//.test(env[key] || '') && token) return { url: env[key], token };
     }
     return { url: '', token: '' };
 }
