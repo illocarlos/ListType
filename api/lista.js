@@ -23,9 +23,8 @@ const MAX_ITEMS = 300;
 const MAX_OPS = 50;
 const MAX_BODY = 100_000;
 import { credentials } from './_redis.js';
+import { HttpError, cleanItem, fromAnotherSite, limitCreate, newId, redis } from './_common.js';
 
-const TIMEOUT_MS = 8000;
-const IMAGE_PREFIX = 'https://prod-mercadona.imgix.net/';
 // Crear listas es lo único sin llave y que gasta: se limita para que nadie agote la cuota gratis.
 // Más que de sobra para una familia; una web que intente crear miles de listas se topa con esto.
 // El tope global es el cortafuegos del monedero aunque alguien use muchas IPs.
@@ -35,43 +34,7 @@ const CREATE_GLOBAL_DAY = 800;
 const redisUrl = () => credentials().url;
 const redisToken = () => credentials().token;
 
-class HttpError extends Error {
-    constructor(status, code) {
-        super(code);
-        this.status = status;
-        this.code = code;
-    }
-}
-
 const keys = id => ({ v: `ml:${id}:v`, items: `ml:${id}:i`, qty: `ml:${id}:q`, done: `ml:${id}:d` });
-
-// ---------- Redis (API REST de Upstash) ----------
-
-// transaction: todo o nada (/multi-exec); si no, en orden pero sin bloqueo (/pipeline)
-async function redis(commands, transaction) {
-    const url = redisUrl();
-    const token = redisToken();
-    if (!url || !token) throw new HttpError(503, 'not_configured');
-    let response;
-    try {
-        response = await fetch(`${url.replace(/\/+$/, '')}/${transaction ? 'multi-exec' : 'pipeline'}`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(commands),
-            signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-    } catch {
-        throw new HttpError(503, 'storage_unreachable');
-    }
-    // 429/400 de Upstash = límite del plan gratis alcanzado o petición rechazada: la app sigue sin sincronizar
-    if (!response.ok) throw new HttpError(response.status === 429 ? 429 : 503, 'storage_error');
-    const results = await response.json().catch(() => null);
-    if (!Array.isArray(results)) throw new HttpError(503, 'storage_error');
-    return results.map(entry => {
-        if (entry && typeof entry === 'object' && 'error' in entry) throw new HttpError(503, 'storage_error');
-        return entry?.result;
-    });
-}
 
 // HGETALL llega como [campo, valor, campo, valor...]
 function pairs(flat) {
@@ -101,31 +64,6 @@ const snapshot = k => [['HGETALL', k.items], ['HGETALL', k.qty], ['HGETALL', k.d
 const refreshTtl = k => [k.v, k.items, k.qty, k.done].map(key => ['EXPIRE', key, TTL_SECONDS]);
 
 // ---------- Validación (lo que llega lo puede haber escrito cualquiera) ----------
-
-const text = (value, max) => typeof value === 'string' && value.length <= max ? value : undefined;
-
-function cleanItem(raw) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError(400, 'invalid_item');
-    const id = raw.id;
-    const name = typeof raw.name === 'string' ? raw.name.trim() : '';
-    if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, 'invalid_item');
-    if (name.length < 1 || name.length > 200) throw new HttpError(400, 'invalid_item');
-    const price = typeof raw.price === 'number' && Number.isFinite(raw.price) && raw.price >= 0 && raw.price < 10000 ? Math.round(raw.price * 100) / 100 : 0;
-    const item = { id, name, type: text(raw.type, 100) ?? '', price };
-    if (['catalog', 'manual', 'mercadona'].includes(raw.source)) item.source = raw.source;
-    // Solo fotos de Mercadona: una dirección cualquiera serviría para saber quién abre la lista
-    if (typeof raw.image === 'string' && raw.image.startsWith(IMAGE_PREFIX) && raw.image.length <= 500) item.image = raw.image;
-    if (typeof raw.mercadonaId === 'string' && /^[0-9]{1,8}(\.[0-9]{1,3})?$/.test(raw.mercadonaId)) item.mercadonaId = raw.mercadonaId;
-    // addedBy: el nombre que la persona escribe al compartir o unirse (solo eso, para ver quién apuntó qué)
-    for (const [field, max] of [['packaging', 100], ['unitPrice', 60], ['store', 40], ['addedBy', 30]]) {
-        const value = text(raw[field], max);
-        if (value) item[field] = value;
-    }
-    if (raw.isNew === true) item.isNew = true;
-    if (raw.byWeight === true) item.byWeight = true;
-    item.addedAt = Number.isSafeInteger(raw.addedAt) && raw.addedAt > 0 ? raw.addedAt : Date.now();
-    return item;
-}
 
 const cleanQuantity = value => Number.isInteger(value) && value >= 1 && value <= 999 ? value : 1;
 const cleanId = value => {
@@ -180,39 +118,8 @@ function commandsFor(op, k, added) {
 
 // ---------- Operaciones ----------
 
-function newId() {
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    return Buffer.from(bytes).toString('base64url');
-}
-
-// IP de quien llama. Se usa la que pone Vercel y que el cliente no puede falsear: primero x-real-ip; si no,
-// el ÚLTIMO valor de x-forwarded-for (el que añade el proxy), no el primero, que sí lo puede poner el cliente.
-function clientIp(req) {
-    const h = req.headers || {};
-    const real = (h['x-real-ip'] || '').toString().trim();
-    if (real) return real.slice(0, 60);
-    const xff = Array.isArray(h['x-forwarded-for']) ? h['x-forwarded-for'].join(',') : (h['x-forwarded-for'] || '').toString();
-    const parts = xff.split(',').map(part => part.trim()).filter(Boolean);
-    return (parts[parts.length - 1] || 'desconocida').slice(0, 60);
-}
-
-// Tope de creación de listas por IP y por hora, y un tope global al día como cortafuegos del gasto.
-// Cuesta 2 operaciones de Redis, solo al crear (algo que se hace muy de vez en cuando).
-async function limitCreate(req) {
-    const now = Date.now();
-    const ipKey = `ml:rl:ip:${clientIp(req)}:${Math.floor(now / 3_600_000)}`;
-    const allKey = `ml:rl:all:${Math.floor(now / 86_400_000)}`;
-    const [ipCount, allCount] = await redis([['INCR', ipKey], ['INCR', allKey]], false);
-    const expires = [];
-    if (Number(ipCount) === 1) expires.push(['EXPIRE', ipKey, 3600]);
-    if (Number(allCount) === 1) expires.push(['EXPIRE', allKey, 86400]);
-    if (expires.length) await redis(expires, false).catch(() => undefined);
-    if (Number(ipCount) > CREATE_PER_IP_HOUR || Number(allCount) > CREATE_GLOBAL_DAY) throw new HttpError(429, 'rate_limited');
-}
-
 async function create(body, req) {
-    await limitCreate(req);
+    await limitCreate(req, 'ml', CREATE_PER_IP_HOUR, CREATE_GLOBAL_DAY);
     const id = newId();
     const k = keys(id);
     const items = Array.isArray(body.items) ? body.items : [];
@@ -312,22 +219,6 @@ function send(res, status, body) {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('x-listtype-sync', '1');
     return res.status(status).json(body);
-}
-
-// Rechaza las peticiones de navegador que llegan desde OTRA web (una página ajena que intente usar el
-// navegador de quien la visita para tocar la API). Los navegadores modernos mandan Sec-Fetch-Site; en un
-// Safari antiguo se mira el Origin. Sin ninguna de las dos (no es un navegador) se deja pasar.
-function fromAnotherSite(req) {
-    const h = req.headers || {};
-    const site = (h['sec-fetch-site'] || '').toString();
-    if (site) return !['same-origin', 'same-site', 'none'].includes(site);
-    const origin = (h['origin'] || '').toString();
-    if (!origin) return false;
-    try {
-        return new URL(origin).host !== (h['host'] || '').toString();
-    } catch {
-        return true;
-    }
 }
 
 export default async function handler(req, res) {
