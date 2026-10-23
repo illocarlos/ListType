@@ -495,3 +495,32 @@ Pedido por el dueño: con varias listas, el icono de abajo a la derecha no debe 
 - Cuando abre una lista directamente: una sola lista sin compartir → nº de productos y total, como siempre; lista fijada (con varias) → nº de productos de esa lista y su nombre.
 - Contrapartida, a la vista: con el nº de listas no se ve a qué lista irá lo que se añade desde Favoritos. Por eso el aviso de voz «Añadido…» ahora dice «en la lista «X»» cuando hay varias; fijar una lista lo resuelve del todo.
 - Pruebas: e2e34 46/46 (4 nuevas) + regresión completa.
+
+## 2026-10-23 · Compartir favoritos (copia puntual) y varias colecciones de favoritos
+
+Pedido por el dueño: compartir los favoritos de alguien «como las listas de la compra»; al abrir el enlace, la app pregunta si **unificar** con los míos o **separarlos** (con nombre, y que aparezca como las listas: si fijo una se abre sola, si no se ve la lista de favoritos). Respuestas suyas: copia puntual, lo suyo se añade a lo mío, da igual quién edite.
+
+**Compartir**
+- Nuevo `api/favoritos.js` (ping / create / get): sube **una copia** de la colección abierta (hasta 300 productos, validados como en las listas) y devuelve un código de 128 bits. Una sola clave `mf:{id}` con caducidad de 90 días. No hay edición ni sincronización: después cada uno tiene lo suyo.
+- No viaja quién apuntó ni cuándo (`addedBy`/`addedAt` se quitan); sí el nombre de la colección y, opcional, el de quien la manda («Tu nombre (opcional)», no obligatorio a diferencia de las listas).
+- Gasto: crear ≈ 4 comandos de Redis, abrir un enlace 1. Topes propios: 20 por IP y hora, 400 al día (los de las listas no se tocan).
+- Enlace `#favoritos=código` (WhatsApp / copiar). En un iPhone con la app instalada se pega en «¿Te han pasado favoritos?» (acepta el enlace dentro de un mensaje; si es de una lista de la compra, lo dice).
+- Refactor: lo común de `lista.js` y `favoritos.js` (errores, Redis, validación de producto, tope de creación, IP, defensa contra webs ajenas) pasa a `api/_common.js`. `lista.js` se comporta igual (50/50 y 14/14 de siempre).
+
+**Al abrir el enlace** (hoja «Favoritos compartidos»)
+- Muestra quién los manda y cuántos son, y calcula de antemano cuántos son nuevos.
+- **Unirlos a «X»**: se añaden al final los que faltan (por id; los de otra tienda, por nombre + tienda, porque cada móvil les pone un id al azar). Lo mío no se toca ni se reordena. Si ya los tienes todos, el botón lo dice y no hace nada.
+- **Guardarlos aparte, con su nombre**: nombre obligatorio (propuesto: «Favoritos de {quien}»), se crea una colección nueva y se abre.
+- **Ahora no**. Enlace roto o caducado: lo dice, con «Entendido».
+
+**Varias colecciones** (`favlists.ts`, igual que `lists.ts`)
+- Registro `favlists:v1` + una clave por colección. Los favoritos de siempre (`favorites`) pasan a «Mis favoritos»; si esa clave reaparece (mudanza de dirección) se **une** a la abierta sin pisar.
+- Pestaña Favoritos: con **varias y ninguna fijada** se ven todas para elegir (tarjetas con nombre, nº y primeros productos); con **una fijada** se abre directa y se empieza en ella al abrir la app; con **una sola**, como siempre. Botón «Colecciones» para llegar siempre a la lista; chincheta, renombrar, borrar, «Nueva colección» (máx. 20).
+- El corazón, las rebajas y la tienda trabajan con la colección **abierta**; el aviso de voz al guardar dice en cuál cuando hay varias.
+
+**Limitaciones, a la vista**
+- La mudanza de dirección («Llevar mis datos») lleva solo la colección abierta, no todas.
+- El precio de los favoritos se refresca solo en la colección abierta; las demás se actualizan al abrirlas.
+- Con varias colecciones y la lista de colecciones a la vista, el número de la pestaña es el de la abierta.
+- La copia no se puede retirar desde la app (caduca a los 90 días): quien tenga el enlace puede verla hasta entonces.
+- Pruebas: `e2e35` 47/47, `apifav.mjs` 32/32, regresión completa.

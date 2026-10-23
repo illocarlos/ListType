@@ -1,8 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Pin, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Pin, Plus, RefreshCw, Search, Share2, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
-import useList from "./hooks/useList"
+import useList, { cleanName } from "./hooks/useList"
 import useFavorites from "./hooks/useFavorites"
 import useMercadona from "./hooks/useMercadona"
 import usePriceHistory from "./hooks/usePriceHistory"
@@ -31,7 +31,11 @@ import AddStoreProduct from "./components/AddStoreProduct.tsx"
 import LoadingProducts from "./components/LoadingProducts.tsx"
 import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
 import MyLists from "./components/MyLists.tsx"
+import MyFavorites from "./components/MyFavorites.tsx"
+import { ReceiveFavoritesPanel, ShareFavoritesPanel } from "./components/FavoritesShare.tsx"
 import { MAX_LISTS } from "./helpers/lists"
+import { MAX_COLLECTIONS } from "./helpers/favlists"
+import { createFavShare, takeFavoritesFromHash } from "./helpers/favshare"
 import { takeShareFromHash } from "./helpers/sync"
 import { flyToList } from "./helpers/flyToList"
 import { isNewHost, isOldHost } from "./helpers/move"
@@ -99,7 +103,11 @@ const itemDetail = (item: listItem) =>
 
 function App() {
   const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, isJoined, leave, myName, setMyName, lists, hasSharedList, pinnedId, pinList, currentId, currentName, openList, newList, renameList, deleteList, summaries } = useList();
-  const { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites } = useFavorites();
+  const {
+    favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites,
+    collections, currentCollectionId, currentCollectionName, pinnedCollectionId,
+    openCollection, newCollection, pinCollection, renameCollection, deleteCollection, mergeIntoCurrent, summaries: favSummaries,
+  } = useFavorites();
   const mercadona = useMercadona();
 
   const [query, setQuery] = useState<string>("");
@@ -109,6 +117,10 @@ function App() {
   const [selectedCheckbox, setSelectedCheckbox] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState<boolean>(false);
   const [homeTab, setHomeTab] = useState<HomeTab>("favoritos");
+  // Favoritos: con varias colecciones y ninguna fijada se empieza viendo todas para elegir (como «Mis listas»);
+  // con una fijada, o con una sola, se abre directamente. El botón «Colecciones» lleva siempre a la lista.
+  const showAllCollections = !pinnedCollectionId && collections.length > 1;
+  const [favView, setFavView] = useState<"overview" | "open">(showAllCollections ? "overview" : "open");
   // Escritorio (md de Tailwind): pestañas arriba y la lista en la columna derecha.
   // Móvil: las mismas pestañas van en la barra de abajo, junto al botón de la lista.
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -316,7 +328,10 @@ function App() {
     // Uno de otra tienda no se puede volver a buscar: se puede deshacer
     if (removing && !item.mercadonaId) setRemovedStore({ item, index: favorites.findIndex(favorite => favorite.id === item.id) });
     toggleFavorite(item);
-    if (!removing) return;
+    if (!removing) {
+      if (collections.length > 1) announce(`${item.name}: guardado en favoritos «${currentCollectionName}».`);
+      return;
+    }
     announce(`${item.name}: quitado de favoritos.${item.mercadonaId ? "" : " Puedes deshacerlo."}`);
     if (!hadFocus) return;
     window.requestAnimationFrame(() => {
@@ -424,6 +439,7 @@ function App() {
   const selectTab = (value: HomeTab) => {
     if (searching) setQuery("");
     setHomeTab(value);
+    if (value === "favoritos") setFavView(showAllCollections ? "overview" : "open");
     if (!isDesktop) {
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
@@ -695,6 +711,53 @@ function App() {
   const joinFromPaste = (code: string) => {
     setShareOpen(false);
     setInvite(code);
+  };
+
+  // ---------- Favoritos compartidos (copia puntual) ----------
+
+  const [shareFavOpen, setShareFavOpen] = useState<boolean>(false);
+  const closeShareFav = useCallback(() => setShareFavOpen(false), []);
+  // Al abrir un enlace "…/#favoritos=código" (al arrancar o con la app abierta) o al pegarlo
+  const [favInvite, setFavInvite] = useState<string | null>(null);
+  const closeFavInvite = useCallback(() => setFavInvite(null), []);
+  useEffect(() => {
+    const read = () => {
+      const code = takeFavoritesFromHash();
+      if (code) setFavInvite(code);
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  const shareFavorites = async (from: string) => {
+    const sender = cleanName(from);
+    if (sender) setMyName(sender);
+    const code = await createFavShare(currentCollectionName, sender, favorites);
+    announce("Enlace de favoritos creado. Envíalo a quien quieras.");
+    return code;
+  };
+  const favoritesFromPaste = (code: string) => {
+    setShareFavOpen(false);
+    setFavInvite(code);
+  };
+  // Tras unir o guardar aparte se enseñan los favoritos recién llegados
+  const goToFavorites = () => {
+    setQuery("");
+    setHomeTab("favoritos");
+    setFavView("open");
+  };
+  const mergeFavInvite = (items: listItem[]) => {
+    const added = mergeIntoCurrent(items);
+    setFavInvite(null);
+    goToFavorites();
+    announce(`${added} ${added === 1 ? "favorito añadido" : "favoritos añadidos"} a «${currentCollectionName}».`);
+    return added;
+  };
+  const saveApartFavInvite = (name: string, items: listItem[]) => {
+    newCollection(name, items);
+    setFavInvite(null);
+    goToFavorites();
+    announce(`Favoritos guardados aparte, con ${items.length} ${items.length === 1 ? "producto" : "productos"}.`);
   };
 
   // Chincheta de la lista abierta: fijarla hace que se abra directamente al tocar «Lista»
@@ -1058,8 +1121,31 @@ function App() {
 
               {homeTab === "favoritos" && (
               <section id="panel-favoritos" role="tabpanel" aria-labelledby="tab-favoritos">
+                {favView === "overview" ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
+                      <h2 id="favorites-title" tabIndex={-1} className="text-lg font-bold focus:outline-none focus-visible:outline-highlight">Mis favoritos</h2>
+                      <button type="button" onClick={() => setShareFavOpen(true)} className="ml-auto flex-none h-11 px-3 inline-flex items-center gap-1.5 rounded-pill border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft">
+                        <Share2 size={20} aria-hidden="true" />
+                        <span>Compartir<span className="sr-only"> favoritos de {currentCollectionName}</span></span>
+                      </button>
+                    </div>
+                    <MyFavorites
+                      collections={favSummaries()}
+                      currentId={currentCollectionId}
+                      pinnedId={pinnedCollectionId}
+                      canAdd={collections.length < MAX_COLLECTIONS}
+                      onOpen={id => { openCollection(id); setFavView("open"); }}
+                      onPin={pinCollection}
+                      onNew={name => { newCollection(name); setFavView("open"); }}
+                      onRename={renameCollection}
+                      onDelete={deleteCollection}
+                    />
+                  </>
+                ) : (
+                <>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
-                  <h2 id="favorites-title" tabIndex={-1} className="text-lg font-bold focus:outline-none focus-visible:outline-highlight">Tus favoritos</h2>
+                  <h2 id="favorites-title" tabIndex={-1} className="text-lg font-bold focus:outline-none focus-visible:outline-highlight">{collections.length > 1 ? currentCollectionName : "Tus favoritos"}</h2>
                   {favorites.length > 0 && (
                     <span className="text-sm text-muted tabular">{favorites.length}</span>
                   )}
@@ -1074,6 +1160,16 @@ function App() {
                   >
                     <Plus size={20} aria-hidden="true" />
                     <span><span className="sr-only">Añadir producto de </span>Otra tienda</span>
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button type="button" onClick={() => setFavView("overview")} className="h-11 px-3 inline-flex items-center gap-1.5 rounded-pill border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft">
+                    <Heart size={20} aria-hidden="true" />
+                    <span>Colecciones<span className="tabular"> ({collections.length})</span></span>
+                  </button>
+                  <button type="button" onClick={() => setShareFavOpen(true)} className="h-11 px-3 inline-flex items-center gap-1.5 rounded-pill border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft">
+                    <Share2 size={20} aria-hidden="true" />
+                    <span>Compartir<span className="sr-only"> favoritos</span></span>
                   </button>
                 </div>
 
@@ -1134,6 +1230,8 @@ function App() {
                       {filteredFavorites.map(favoriteRow)}
                     </ul>
                   </>
+                )}
+                </>
                 )}
               </section>
               )}
@@ -1287,6 +1385,35 @@ function App() {
           onLeave={leaveList}
           onJoinCode={joinFromPaste}
         />
+      </Sheet>
+
+      {/* Compartir mis favoritos: copia puntual con enlace */}
+      <Sheet open={shareFavOpen} title="Compartir favoritos" onClose={closeShareFav}>
+        {shareFavOpen && (
+          <ShareFavoritesPanel
+            collectionName={currentCollectionName}
+            count={favorites.length}
+            myName={myName}
+            onCreate={shareFavorites}
+            onPasteCode={favoritesFromPaste}
+          />
+        )}
+      </Sheet>
+
+      {/* Favoritos que te comparten: unirlos a los míos o guardarlos aparte */}
+      <Sheet open={favInvite !== null} title="Favoritos compartidos" onClose={closeFavInvite}>
+        {favInvite && (
+          <ReceiveFavoritesPanel
+            key={favInvite}
+            code={favInvite}
+            mine={favorites}
+            currentName={currentCollectionName}
+            canAddCollection={collections.length < MAX_COLLECTIONS}
+            onMerge={mergeFavInvite}
+            onSaveApart={saveApartFavInvite}
+            onCancel={closeFavInvite}
+          />
+        )}
       </Sheet>
 
       {/* En una lista compartida sin nombre (te uniste antes de que se pidiera): hay que ponerlo */}
