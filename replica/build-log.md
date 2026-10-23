@@ -410,3 +410,14 @@ Pedido por el dueño: que el nombre sea obligatorio y que a quien entró antes s
 - Quien ya estaba en una lista compartida sin nombre ve al abrir la app la ventana **«Ponte un nombre»**. No se puede cerrar: ni botón Cerrar, ni Escape, ni tocar fuera, ni el botón atrás. La única otra salida es «Prefiero dejar de compartir» (con confirmación).
 - `Sheet` tiene una opción `dismissible={false}` para esto: si se pulsa atrás, vuelve a poner su paso en el historial.
 - Pruebas: e2e31 29/29 + regresión completa.
+
+## 2026-10-23 · Carrito con la disposición de Favoritos y sin WhatsApp
+
+Pedido por el dueño: quitar "Enviar por WhatsApp" (no hace falta) y que las filas del carrito se parezcan lo máximo posible a las de Favoritos.
+
+- Fuera el botón "Enviar por WhatsApp" del pie de la lista (y su componente). El de la hoja Compartir, que manda el enlace de invitación, se queda.
+- Filas del carrito como las de Favoritos: tarjeta verde clara, foto a la izquierda, nombre arriba que abre la ficha (con el icono ⓘ), papelera donde allí va el corazón, precio en negrita, formato debajo y − cantidad + a la derecha.
+- Lo propio del carrito, encajado sin quitar ancho al texto: la casilla "en el carro" va debajo de la foto; "total: X €" solo si hay más de una unidad; "Apuntado por…" bajo el formato.
+- Lo que está en el carro: tarjeta gris, nombre tachado y solo la cantidad cogida.
+- El botón "Ficha" aparte desaparece: la ficha se abre tocando el nombre, como en Favoritos (mismo nombre accesible "Ficha de…").
+- Pruebas: regresión completa; se adaptaron tres pruebas antiguas que pulsaban el botón de WhatsApp.

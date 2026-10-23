@@ -64,34 +64,56 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
         )
     }
 
+    // Misma disposición que las filas de Favoritos: foto a la izquierda, nombre (abre la ficha) arriba con la
+    // papelera donde allí va el corazón, precio en negrita, detalles debajo y − cantidad + a la derecha.
+    // Lo propio del carrito: la casilla "en el carro" delante y quién lo apuntó.
     const row = (item: orderItem) => {
         const detail = [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ")
-        // Lista compartida: quién lo apuntó
         const who = item.addedBy ? `Apuntado por ${item.addedBy}` : ""
         const done = Boolean(item.done)
+        const canOpen = Boolean(onOpenDetails && item.mercadonaId)
         return (
-            <li key={item.id} data-row-id={item.id} className={`flex gap-3 px-4 py-3 ${done ? "bg-surface-sunk" : ""}`}>
-                {onToggleDone && (
-                    <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={done}
-                        aria-label={`${item.name}: en el carro`}
-                        onClick={event => toggle(item, event.currentTarget)}
-                        className="flex-none -ml-2 -mr-1 h-11 w-11 grid place-items-center rounded-full hover:bg-surface-sunk"
-                    >
-                        <span aria-hidden="true" className={`h-7 w-7 grid place-items-center rounded-sm border-2 ${done ? "border-accent bg-accent text-on-accent" : "border-border-input bg-surface"}`}>
-                            {done && <Check size={18} strokeWidth={3} />}
-                        </span>
-                    </button>
-                )}
-                <div className={done ? "opacity-60" : ""}>
-                    <Thumb item={item} size="sm" />
+            <li
+                key={item.id}
+                data-row-id={item.id}
+                className={`flex gap-3 px-3 py-2 rounded-md transition-colors duration-200 ${done ? "bg-surface-sunk" : "bg-accent-soft"}`}
+            >
+                {/* Foto y, debajo, la casilla "en el carro": así el texto tiene el mismo ancho que en Favoritos */}
+                <div className="flex-none flex flex-col items-center gap-1 pt-1">
+                    <div className={done ? "opacity-60" : ""}>
+                        <Thumb item={item} />
+                    </div>
+                    {onToggleDone && (
+                        <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={done}
+                            aria-label={`${item.name}: en el carro`}
+                            onClick={event => toggle(item, event.currentTarget)}
+                            className="h-11 w-11 grid place-items-center rounded-full hover:bg-surface"
+                        >
+                            <span aria-hidden="true" className={`h-7 w-7 grid place-items-center rounded-sm border-2 ${done ? "border-accent bg-accent text-on-accent" : "border-border-input bg-surface"}`}>
+                                {done && <Check size={18} strokeWidth={3} />}
+                            </span>
+                        </button>
+                    )}
                 </div>
 
                 <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-1">
-                        <p className={`flex-1 font-semibold leading-snug break-words ${done ? "text-muted line-through" : ""}`}>{item.name}</p>
+                        <p className={`flex-1 pt-1 text-base font-semibold leading-snug break-words ${done ? "text-muted line-through" : ""}`}>
+                            {canOpen ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenDetails?.(item)}
+                                    className="relative inline text-left font-semibold leading-snug break-words hover:underline underline-offset-2 rounded-sm before:absolute before:inset-x-0 before:-top-3 before:-bottom-0.5 before:content-['']"
+                                >
+                                    <span className="sr-only">Ficha de </span>
+                                    {item.name}
+                                    <Info size={16} aria-hidden="true" className="ml-1 inline-block align-[-2px] text-accent" />
+                                </button>
+                            ) : item.name}
+                        </p>
                         <button
                             type="button"
                             data-trash
@@ -102,55 +124,56 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
                             <Trash2 size={20} aria-hidden="true" />
                         </button>
                     </div>
-                    {detail && <p className="text-sm text-muted break-words">{detail}</p>}
-                    {who && <p className="text-sm font-semibold text-accent-strong break-words">{who}</p>}
 
-                    {done ? (
-                        // En el carro: sin botones de cantidad (ya no se van a tocar), solo lo que se ha cogido
-                        <p className="mt-1 text-base text-muted tabular">
-                            {item.byWeight ? `${item.quantity} kg` : `X${item.quantity}`}
-                            {item.price > 0 && <> · {formatCurrency(item.price * item.quantity)}</>}
-                        </p>
-                    ) : (
-                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center rounded-pill border border-border bg-surface">
-                                <button
-                                    type="button"
-                                    onClick={() => decreaseItem(item.id)}
-                                    disabled={item.quantity <= 1}
-                                    aria-label={`Quitar ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
-                                    className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk disabled:opacity-40 disabled:hover:bg-transparent"
-                                >
-                                    <Minus size={20} aria-hidden="true" />
-                                </button>
-                                <span className="min-w-[2.25rem] text-center text-base font-bold tabular">
-                                    {item.byWeight ? `${item.quantity} kg` : `X${item.quantity}`}
-                                    <span className="sr-only">{item.byWeight ? " aproximados" : " unidades"}</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => addItem(item)}
-                                    aria-label={`Añadir ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
-                                    className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
-                                >
-                                    <Plus size={20} aria-hidden="true" />
-                                </button>
-                            </div>
+                    <div className="mt-0.5 flex items-center gap-2">
+                        <p className="min-w-0 flex-1 tabular leading-snug">
                             {item.price > 0 && (
-                                <span className="text-base text-muted tabular">total{item.byWeight ? " aprox." : ""}: {formatCurrency(item.price * item.quantity)}</span>
+                                <span className={`text-base font-bold ${done ? "text-muted" : ""}`}>
+                                    {formatCurrency(item.price)}
+                                    {item.byWeight && <span className="text-sm font-semibold"> /kg<span className="sr-only">, a granel</span></span>}
+                                </span>
                             )}
-                            {onOpenDetails && item.mercadonaId && (
-                                <button
-                                    type="button"
-                                    onClick={() => onOpenDetails(item)}
-                                    className="h-11 px-3 inline-flex items-center gap-1 rounded-pill text-base font-semibold text-accent-strong hover:bg-surface-sunk"
-                                >
-                                    <Info size={18} aria-hidden="true" />
-                                    Ficha<span className="sr-only"> de {item.name}</span>
-                                </button>
+                            {item.price > 0 && item.quantity > 1 && (
+                                <span className="block text-sm text-muted">total{item.byWeight ? " aprox." : ""}: {formatCurrency(item.price * item.quantity)}</span>
+                            )}
+                            {detail && <span className="block text-sm text-muted break-words">{detail}</span>}
+                            {who && <span className="block text-sm font-semibold text-accent-strong break-words">{who}</span>}
+                        </p>
+
+                        <div className="flex-none flex items-center">
+                            {done ? (
+                                // En el carro: sin botones de cantidad (ya no se van a tocar), solo lo que se ha cogido
+                                <span className="px-2 text-base font-bold text-muted tabular">
+                                    {item.byWeight ? `${item.quantity} kg` : `X${item.quantity}`}
+                                </span>
+                            ) : (
+                                <div className="flex items-center rounded-pill bg-surface border border-border">
+                                    <button
+                                        type="button"
+                                        onClick={() => decreaseItem(item.id)}
+                                        disabled={item.quantity <= 1}
+                                        aria-label={`Quitar ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
+                                        className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk disabled:opacity-40 disabled:hover:bg-transparent"
+                                    >
+                                        <Minus size={20} aria-hidden="true" />
+                                    </button>
+                                    <span className="min-w-[1.75rem] text-center text-lg font-bold tabular">
+                                        {item.quantity}
+                                        {item.byWeight && <span className="text-sm font-semibold"> kg</span>}
+                                        <span className="sr-only">{item.byWeight ? " aproximados" : " unidades"}</span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => addItem(item)}
+                                        aria-label={`Añadir ${item.byWeight ? "un kilo" : "una unidad"} de ${item.name}`}
+                                        className="h-11 w-11 grid place-items-center rounded-full text-accent-strong hover:bg-surface-sunk"
+                                    >
+                                        <Plus size={20} aria-hidden="true" />
+                                    </button>
+                                </div>
                             )}
                         </div>
-                    )}
+                    </div>
                 </div>
             </li>
         )
@@ -159,7 +182,7 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
     return (
         <div ref={listRef}>
             {pending.length > 0 && (
-                <ul className="divide-y divide-border">
+                <ul className="space-y-2 px-3 pt-3">
                     {pending.map(row)}
                 </ul>
             )}
@@ -171,7 +194,7 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
                     <h3 id={cartTitleId} className="px-4 py-2 text-sm font-semibold text-muted">
                         En el carro <span className="tabular">({inCart.length})</span>
                     </h3>
-                    <ul className="divide-y divide-border border-t border-border">
+                    <ul className="space-y-2 px-3">
                         {inCart.map(row)}
                     </ul>
                 </section>

@@ -23,7 +23,6 @@ import Sheet from "./components/Sheet.tsx"
 import InstallHint from "./components/InstallHint.tsx"
 import ZoneCard from "./components/ZoneCard.tsx"
 import ProductSheet from "./components/ProductSheet.tsx"
-import ShareButton from "./components/ShareButton.tsx"
 import AppUpdate from "./components/AppUpdate.tsx"
 import Collapsible from "./components/Collapsible.tsx"
 import BackToTop from "./components/BackToTop.tsx"
@@ -723,7 +722,6 @@ function App() {
       <div className="border-t border-border p-4 space-y-3 safe-bottom">
         <OrderTotal order={order} />
         <ButtonPdf order={order} />
-        <ShareButton order={order} />
       </div>
     </div>
   );
