@@ -377,3 +377,4 @@ Pedido por el dueño: que 2, 3 o 4 móviles tengan la misma lista, "como Tricoun
   - Servidor: 47/47 contra un emulador local de Upstash (fakeredis con la misma API REST).
   - App: 49/49 con 5 móviles simulados (crear, unirse juntando o no, pegar enlace, cambios cruzados, + a la vez, tachar, sin conexión, dejar de compartir, vaciar y deshacer, quitar lo del carro, recarga, consumo a la vista y en segundo plano, reintento sin duplicar, lista borrada, enlace malo, sin base de datos, axe).
   - Regresión completa.
+- Conectada la base de datos Upstash (plan Free, Frankfurt) al proyecto con prefijo `KV`. La función acepta también el prefijo que sustituye a "KV" (`STORAGE_REST_API_URL`) y solo direcciones http(s). Esta publicación es la que carga las claves en producción (las variables solo llegan a despliegues nuevos).
