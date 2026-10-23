@@ -198,6 +198,9 @@ export default function useList() {
         return remote.items.length;
     }, [registry.lists, openList, startEngine]);
 
+    // ¿Alguna de mis listas está compartida? (la abierta, por lo que hay en memoria; las demás, por lo guardado)
+    const hasSharedList = registry.lists.some(meta => meta.id === currentId ? sharedListId !== null : loadListShared(meta.id) !== null);
+
     const isJoined = useCallback((sharedIdValue: string) => registry.lists.some(meta => loadListShared(meta.id)?.id === sharedIdValue), [registry.lists]);
 
     const leave = useCallback(() => {
@@ -226,6 +229,7 @@ export default function useList() {
         myName,
         setMyName,
         lists: registry.lists,
+        hasSharedList,
         pinnedId: registry.pinned,
         pinList,
         currentId,
