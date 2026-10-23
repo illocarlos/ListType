@@ -279,7 +279,7 @@ function App() {
   const addAnnounced = (item: listItem) => {
     const quantity = quantityOf(item.id) + 1;
     addItem(item);
-    announce(`Añadido: ${item.name}. ${amount(item, quantity)} en la lista.`);
+    announce(`Añadido: ${item.name}. ${amount(item, quantity)} en la lista${lists.length > 1 ? ` «${currentName}»` : ""}.`);
   };
 
   // En los resultados, "−" con 1 unidad quita el producto de la lista
@@ -1215,17 +1215,21 @@ function App() {
             <span aria-hidden="true" className="relative h-7 grid place-items-center">
               <ShoppingBasket size={22} />
               <span className="absolute -top-1.5 left-[15px] min-w-[22px] h-[22px] px-1 rounded-pill bg-highlight text-on-highlight text-sm font-bold grid place-items-center tabular">
-                {lineCount}
+                {showAllLists ? lists.length : lineCount}
               </span>
             </span>
             <span className="sr-only">
-              {showAllLists ? `Ver mis listas (abierta: ${currentName})` : lists.length > 1 ? `Ver lista ${currentName}` : "Ver lista"}, {lineCount} {lineCount === 1 ? "producto" : "productos"}{total > 0 && lists.length === 1 ? "," : ""}
+              {showAllLists
+                ? `Ver mis listas, ${lists.length} ${lists.length === 1 ? "lista" : "listas"}, abierta: ${currentName}`
+                : `${lists.length > 1 ? `Ver lista ${currentName}` : "Ver lista"}, ${lineCount} ${lineCount === 1 ? "producto" : "productos"}${total > 0 && lists.length === 1 ? "," : ""}`}
             </span>
-            {lists.length > 1
-              ? <span aria-hidden="true" className="block max-w-full truncate px-1 text-sm font-extrabold leading-tight">{currentName}</span>
-              : total > 0
-                ? <span className="whitespace-nowrap text-sm font-extrabold leading-tight tabular">{formatCurrency(total)}</span>
-                : <span aria-hidden="true" className="whitespace-nowrap text-sm font-extrabold leading-tight">Lista</span>}
+            {showAllLists
+              ? <span aria-hidden="true" className="whitespace-nowrap text-sm font-extrabold leading-tight">{lists.length === 1 ? "Lista" : "Listas"}</span>
+              : lists.length > 1
+                ? <span aria-hidden="true" className="block max-w-full truncate px-1 text-sm font-extrabold leading-tight">{currentName}</span>
+                : total > 0
+                  ? <span className="whitespace-nowrap text-sm font-extrabold leading-tight tabular">{formatCurrency(total)}</span>
+                  : <span aria-hidden="true" className="whitespace-nowrap text-sm font-extrabold leading-tight">Lista</span>}
           </button>
         </div>
       </nav>

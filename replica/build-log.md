@@ -486,3 +486,12 @@ Pedido por el dueño: si hay listas compartidas, al tocar la cesta debe verse la
 - Compartida y fijada: se abre directa. Al dejar de compartir la única lista, vuelve a abrirse directa.
 - Interpretación mía, a confirmar: con varias listas sin compartir y ninguna fijada se siguen viendo todas (lo pedido antes: «si tenemos 4 listas vemos las 4»).
 - Pruebas: e2e34 42/42 (9 nuevas) + regresión completa.
+
+## 2026-10-23 · La cesta enseña el número de listas cuando abre «Mis listas»
+
+Pedido por el dueño: con varias listas, el icono de abajo a la derecha no debe enseñar nº de productos y dinero sino el número de listas; esos datos se quedan si no hay listas compartidas.
+
+- Cuando la cesta abre «Mis listas» (varias listas, o alguna compartida, y ninguna fijada): la insignia es el **nº de listas** y debajo pone «Listas» (o «Lista» si hay una). Sin productos ni dinero. Nombre accesible: «Ver mis listas, 4 listas, abierta: X».
+- Cuando abre una lista directamente: una sola lista sin compartir → nº de productos y total, como siempre; lista fijada (con varias) → nº de productos de esa lista y su nombre.
+- Contrapartida, a la vista: con el nº de listas no se ve a qué lista irá lo que se añade desde Favoritos. Por eso el aviso de voz «Añadido…» ahora dice «en la lista «X»» cuando hay varias; fijar una lista lo resuelve del todo.
+- Pruebas: e2e34 46/46 (4 nuevas) + regresión completa.
