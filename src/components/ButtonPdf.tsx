@@ -154,7 +154,7 @@ const DownloadPdfButton = ({ order }: ButtonPdfProps) => {
                 doc.text(lines, x + PAD, nameY);
 
                 // Formato y precio por kilo/litro, en gris y en una línea
-                const detail = [item.packaging, item.unitPrice].filter(Boolean).join(' · ');
+                const detail = [item.store, item.packaging, item.unitPrice].filter(Boolean).join(' · ');
                 if (detail) {
                     doc.setFontSize(DETAIL_SIZE);
                     doc.setTextColor(90);
