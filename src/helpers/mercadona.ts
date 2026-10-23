@@ -8,7 +8,7 @@ const CACHE_PREFIX = "mercadona:v1:";
 const WAREHOUSE_KEY = `${CACHE_PREFIX}wh`;
 const TTL_MS = 24 * 60 * 60 * 1000;
 // Rebajas y novedades: el móvil las renueva cada 24 h, igual que los pasillos (a petición del dueño: se
-// publican a diario). El CDN de Vercel renueva su copia cada 12 h. Si un producto llega también por su
+// publican a diario). El CDN de Vercel y la base de datos renuevan su copia cada 24 h. Si un producto llega también por su
 // pasillo, manda el precio con contenido más reciente (fetchedAt), no el camino por el que llegó.
 const HOME_TTL_MS = 24 * 60 * 60 * 1000;
 // Si los precios guardados tienen más de esto y no se han podido renovar, se avisa

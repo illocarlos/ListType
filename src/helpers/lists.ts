@@ -16,7 +16,8 @@ const orderKey = (id: string) => `L:${id}:order`;
 const sharedKey = (id: string) => `L:${id}:shared`;
 
 export type ListMeta = { id: string, name: string };
-export type Registry = { current: string, lists: ListMeta[] };
+// pinned: la lista "fijada" (opcional): al tocar «Lista» se abre directamente, sin pasar por «Mis listas»
+export type Registry = { current: string, pinned: string | null, lists: ListMeta[] };
 
 export const MAX_LISTS = 20;
 export const cleanListName = (text: string) => text.trim().replace(/\s+/g, " ").slice(0, 40);
@@ -55,14 +56,15 @@ function writeRegistry(registry: Registry) {
 export function loadRegistry(): Registry {
     const raw = readJson(REGISTRY_KEY);
     if (raw && typeof raw === "object") {
-        const parsed = raw as { current?: unknown, lists?: unknown };
+        const parsed = raw as { current?: unknown, pinned?: unknown, lists?: unknown };
         const lists = Array.isArray(parsed.lists)
             ? parsed.lists.filter((entry): entry is ListMeta => Boolean(entry) && typeof (entry as ListMeta).id === "string" && typeof (entry as ListMeta).name === "string")
             : [];
         if (lists.length) {
             const current = typeof parsed.current === "string" && lists.some(list => list.id === parsed.current) ? parsed.current : lists[0].id;
             adoptLegacy(current);
-            return { current, lists };
+            const pinned = typeof parsed.pinned === "string" && lists.some(list => list.id === parsed.pinned) ? parsed.pinned : null;
+            return { current, pinned, lists };
         }
     }
     const registry = migrate();
@@ -99,9 +101,18 @@ function migrate(): Registry {
         remove(OLD_SHARED_KEY);
     }
     remove(OLD_ORDER_KEY);
-    const registry: Registry = { current: id, lists: [{ id, name: "La compra" }] };
+    const registry: Registry = { current: id, pinned: null, lists: [{ id, name: "La compra" }] };
     writeRegistry(registry);
     return registry;
+}
+
+// Fija una lista (o quita la fijada con null). Solo hay una fijada a la vez.
+export function setPinnedList(id: string | null): Registry {
+    const registry = loadRegistry();
+    const pinned = id !== null && registry.lists.some(list => list.id === id) ? id : null;
+    const next = { ...registry, pinned };
+    writeRegistry(next);
+    return next;
 }
 
 export function setCurrentList(id: string): Registry {
@@ -117,7 +128,7 @@ export function createList(name: string): Registry {
     if (registry.lists.length >= MAX_LISTS) return registry;
     const id = newLocalId();
     saveImportant(orderKey(id), JSON.stringify([]));
-    const next: Registry = { current: id, lists: [...registry.lists, { id, name: cleanListName(name) || "Lista" }] };
+    const next: Registry = { ...registry, current: id, lists: [...registry.lists, { id, name: cleanListName(name) || "Lista" }] };
     writeRegistry(next);
     return next;
 }
@@ -145,7 +156,8 @@ export function deleteList(id: string): Registry {
     } else if (current === id) {
         current = lists[0].id;
     }
-    const next = { current, lists };
+    const next: Registry = { current, pinned: registry.pinned === id ? null : registry.pinned, lists };
+    if (next.pinned && !lists.some(list => list.id === next.pinned)) next.pinned = null;
     writeRegistry(next);
     return next;
 }

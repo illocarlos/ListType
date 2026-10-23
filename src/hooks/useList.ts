@@ -6,7 +6,7 @@ import { createShared, fetchShared, newSharedState, SyncEngine, type SharedState
 import {
     cleanListName, createList as createListStore, deleteList as deleteListStore, listSummary,
     loadListOrder, loadListShared, loadRegistry, renameList as renameListStore, saveListOrder,
-    saveListShared, setCurrentList, type ListSummary,
+    saveListShared, setCurrentList, setPinnedList, type ListSummary,
 } from "../helpers/lists";
 
 export type JoinMode = "merge" | "replace";
@@ -23,7 +23,11 @@ const loadName = (): string => {
 export const cleanName = (text: string) => text.trim().replace(/\s+/g, " ").slice(0, 30);
 
 export default function useList() {
-    const [registry, setRegistry] = useState(loadRegistry);
+    // Al arrancar, con una lista fijada se empieza en ella
+    const [registry, setRegistry] = useState(() => {
+        const loaded = loadRegistry();
+        return loaded.pinned && loaded.current !== loaded.pinned ? setCurrentList(loaded.pinned) : loaded;
+    });
     const currentId = registry.current;
     const currentIdRef = useRef(currentId);
     currentIdRef.current = currentId;
@@ -150,6 +154,8 @@ export default function useList() {
         return next.current;
     }, [attach]);
 
+    const pinList = useCallback((id: string | null) => setRegistry(setPinnedList(id)), []);
+
     const renameList = useCallback((id: string, name: string) => setRegistry(renameListStore(id, name)), []);
 
     const deleteList = useCallback((id: string) => {
@@ -220,6 +226,8 @@ export default function useList() {
         myName,
         setMyName,
         lists: registry.lists,
+        pinnedId: registry.pinned,
+        pinList,
         currentId,
         currentName: currentMeta?.name ?? "La compra",
         openList,

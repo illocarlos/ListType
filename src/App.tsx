@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Pin, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
@@ -98,7 +98,7 @@ const itemDetail = (item: listItem) =>
   [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
-  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, isJoined, leave, myName, setMyName, lists, currentId, currentName, openList, newList, renameList, deleteList, summaries } = useList();
+  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, isJoined, leave, myName, setMyName, lists, pinnedId, pinList, currentId, currentName, openList, newList, renameList, deleteList, summaries } = useList();
   const { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
@@ -631,7 +631,24 @@ function App() {
   const [mobileView, setMobileView] = useState<"list" | "lists">("list");
   const noop = useCallback(() => undefined, []);
   const closeMyLists = useCallback(() => setListsOpen(false), []);
-  const closeMobileList = useCallback(() => { setListOpen(false); setMobileView("list"); }, []);
+  // Al cerrar la hoja de la lista en móvil: con una lista fijada, vuelve a ser la abierta (ahí van las cosas que
+  // se añaden desde Favoritos y el resto de pestañas); si se había entrado en otra, no se queda "escondida".
+  const closeMobileList = useCallback(() => {
+    setListOpen(false);
+    setMobileView("list");
+    if (pinnedId && currentId !== pinnedId) openList(pinnedId);
+  }, [pinnedId, currentId, openList]);
+  // Botón «Lista» de la barra de abajo: con una lista fijada (o una sola lista) se abre directa;
+  // con varias y ninguna fijada, se ven todas para elegir.
+  const openFromBar = () => {
+    if (pinnedId) {
+      if (currentId !== pinnedId) openList(pinnedId);
+      setMobileView("list");
+    } else {
+      setMobileView(lists.length > 1 ? "lists" : "list");
+    }
+    setListOpen(true);
+  };
   const openMyLists = useCallback(() => {
     if (isDesktop) setListsOpen(true);
     else setMobileView("lists");
@@ -682,6 +699,19 @@ function App() {
     setInvite(code);
   };
 
+  // Chincheta de la lista abierta: fijarla hace que se abra directamente al tocar «Lista»
+  const pinToggle = (
+    <button
+      type="button"
+      onClick={() => pinList(pinnedId === currentId ? null : currentId)}
+      aria-pressed={pinnedId === currentId}
+      aria-label={pinnedId === currentId ? "Dejar de fijar esta lista" : "Fijar esta lista"}
+      className={`h-11 w-11 grid place-items-center rounded-pill border ${pinnedId === currentId ? "border-accent bg-accent-soft text-accent-strong" : "border-border text-muted hover:bg-surface-sunk hover:text-text"}`}
+    >
+      <Pin size={18} aria-hidden="true" className={pinnedId === currentId ? "fill-current" : ""} />
+    </button>
+  );
+
   const listPanel = (withHeader: boolean) => (
     <div className="flex h-full flex-col bg-surface">
       {withHeader && (
@@ -690,26 +720,32 @@ function App() {
             <h2 className="text-lg font-bold break-words">{currentName}</h2>
             <span className="text-sm text-muted tabular">{lineCount} {lineCount === 1 ? "producto" : "productos"}</span>
           </div>
-          <button
-            type="button"
-            onClick={openMyLists}
-            className="flex-none h-11 px-3 inline-flex items-center gap-1.5 rounded-pill border border-border text-base font-semibold hover:bg-surface-sunk"
-          >
-            <LayoutList size={18} aria-hidden="true" />
-            Mis listas
-          </button>
+          <div className="flex flex-none items-center gap-2">
+            {pinToggle}
+            <button
+              type="button"
+              onClick={openMyLists}
+              className="h-11 px-3 inline-flex items-center gap-1.5 rounded-pill border border-border text-base font-semibold hover:bg-surface-sunk"
+            >
+              <LayoutList size={18} aria-hidden="true" />
+              Mis listas
+            </button>
+          </div>
         </div>
       )}
       {/* En la hoja de móvil (sin cabecera) el acceso a "Mis listas" va arriba del todo */}
       {!withHeader && (
-        <button
-          type="button"
-          onClick={openMyLists}
-          className="flex min-h-11 items-center gap-1.5 px-4 text-base font-semibold text-accent-strong border-b border-border hover:bg-surface-sunk"
-        >
-          <ChevronLeft size={18} aria-hidden="true" />
-          Mis listas
-        </button>
+        <div className="flex items-center justify-between border-b border-border">
+          <button
+            type="button"
+            onClick={openMyLists}
+            className="flex min-h-11 items-center gap-1.5 px-4 text-base font-semibold text-accent-strong hover:bg-surface-sunk"
+          >
+            <ChevronLeft size={18} aria-hidden="true" />
+            Mis listas
+          </button>
+          <div className="pr-2">{pinToggle}</div>
+        </div>
       )}
       <ShareRow shared={sharedListId !== null} status={syncStatus} onOpen={() => setShareOpen(true)} />
       <div className="flex-1 overflow-y-auto">
@@ -1173,7 +1209,7 @@ function App() {
           </div>
           <button
             type="button"
-            onClick={() => { setMobileView("list"); setListOpen(true); }}
+            onClick={openFromBar}
             aria-haspopup="dialog"
             data-list-target
             className="flex-none w-[84px] max-[389px]:w-[76px] max-[359px]:w-[68px] h-14 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent text-on-accent"
@@ -1184,10 +1220,14 @@ function App() {
                 {lineCount}
               </span>
             </span>
-            <span className="sr-only">Ver lista, {lineCount} {lineCount === 1 ? "producto" : "productos"}{total > 0 ? "," : ""}</span>
-            {total > 0
-              ? <span className="whitespace-nowrap text-sm font-extrabold leading-tight tabular">{formatCurrency(total)}</span>
-              : <span aria-hidden="true" className="whitespace-nowrap text-sm font-extrabold leading-tight">Lista</span>}
+            <span className="sr-only">
+              {lists.length > 1 && !pinnedId ? `Ver mis listas (abierta: ${currentName})` : lists.length > 1 ? `Ver lista ${currentName}` : "Ver lista"}, {lineCount} {lineCount === 1 ? "producto" : "productos"}{total > 0 && lists.length === 1 ? "," : ""}
+            </span>
+            {lists.length > 1
+              ? <span aria-hidden="true" className="block max-w-full truncate px-1 text-sm font-extrabold leading-tight">{currentName}</span>
+              : total > 0
+                ? <span className="whitespace-nowrap text-sm font-extrabold leading-tight tabular">{formatCurrency(total)}</span>
+                : <span aria-hidden="true" className="whitespace-nowrap text-sm font-extrabold leading-tight">Lista</span>}
           </button>
         </div>
       </nav>
@@ -1200,6 +1240,8 @@ function App() {
         <MyLists
           lists={summaries()}
           currentId={currentId}
+          pinnedId={pinnedId}
+          onPin={pinList}
           canAdd={lists.length < MAX_LISTS}
           onOpen={enterList}
           onNew={createAndOpen}
@@ -1219,6 +1261,8 @@ function App() {
           <MyLists
             lists={summaries()}
             currentId={currentId}
+            pinnedId={pinnedId}
+            onPin={pinList}
             canAdd={lists.length < MAX_LISTS}
             onOpen={enterList}
             onNew={createAndOpen}
