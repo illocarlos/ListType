@@ -431,3 +431,18 @@ Pedido por el dueño: al añadir desde Favoritos debe verse que va a la lista, y
 - Con "reducir movimiento" no vuela nada; solo el ✓. El lector de pantalla sigue oyendo "Añadido: … N unidades en la lista". El foco se queda en el botón.
 - Resultados de Mercadona, Novedades, Rebajas y Pasillos no cambian (siguen con − cantidad +).
 - Pruebas: 17/17 nuevas + regresión completa; dos pruebas antiguas adaptadas (usaban el − cantidad + de Favoritos).
+
+## 2026-10-23 · Varias listas (como los tricounts de Tricount)
+
+Pedido por el dueño: poder tener varias listas, compartidas o solo en el móvil, y ver de cada una sus componentes antes de entrar.
+
+- Pantalla **«Mis listas»**: una tarjeta por lista con nombre, personas (las que han apuntado algo, si es compartida), nº de productos y total. Lápiz para renombrar o borrar (con confirmación); «Nueva lista» pide un nombre obligatorio. Máximo 20.
+- Se llega desde el botón **«Mis listas»** de la cabecera de la lista. El botón «Lista» de abajo sigue abriendo directamente la lista actual (decisión: abrir «Mis listas» en cada toque añadía un toque a lo que más se hace, que es mirar la lista). En móvil es una sola hoja que cambia entre la lista y «Mis listas»; en escritorio, hoja aparte.
+- Cada lista guarda lo suyo: productos (`L:{id}:order`) y, si es compartida, su estado de sincronización (`L:{id}:shared`). Registro en `lists:v1`. Lo de Favoritos se añade a la lista abierta.
+- **Migración:** la lista única anterior pasa a llamarse «La compra» sin perder nada, con su enlace compartido si lo tenía.
+- **Unirse con un enlace** crea una lista nueva («Lista compartida», renombrable) en vez de mezclarse con la actual; si ya estabas en esa lista, solo se abre. Desaparecen los botones «Unirme y añadir mis productos» / «sin mis productos».
+- **Borrar** una lista solo la quita de ese móvil; los demás siguen con la suya. Nunca se queda en cero listas.
+- Puente con la clave antigua `order` (la usa «Llevar mis datos», la mudanza de dirección): se **une** a la lista actual, no la pisa.
+- Arreglo de paso: `Sheet` reiniciaba el foco cuando cambiaba la función `onClose` entre renders; ahora usa una referencia estable.
+- El título de la hoja móvil sigue mostrando el número: «La compra (3)».
+- Pruebas: e2e33 22/22 nuevas + regresión completa; e2e30 y e2e31 reescritas para el nuevo «unirse».

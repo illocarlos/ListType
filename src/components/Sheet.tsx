@@ -82,7 +82,7 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom", dismissible
         const onKey = (event: KeyboardEvent) => {
             if (openSheets[openSheets.length - 1] !== self) return;
             if (event.key === "Escape") {
-                if (dismissibleRef.current) onClose();
+                if (dismissibleRef.current) onCloseRef.current();
                 return;
             }
             if (event.key !== "Tab" || !panel) return;
@@ -114,7 +114,7 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom", dismissible
             if (openSheets.length === 0) document.body.style.overflow = previousOverflow;
             opener?.focus?.();
         };
-    }, [open, onClose]);
+    }, [open]);
 
     if (!open) return null;
 

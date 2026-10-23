@@ -1,6 +1,5 @@
 import type { listItem, orderItem } from "../types/types";
 import { applyOps, sortByAdded, wireItem, type ListOp } from "./listOps";
-import { saveImportant } from "./mercadona";
 
 // ---------- Lista compartida entre varios móviles ----------
 // El servidor (api/lista.js) guarda la lista; cada móvil guarda una copia y los cambios que aún no ha enviado.
@@ -8,13 +7,12 @@ import { saveImportant } from "./mercadona";
 // aunque no haya cobertura). Los cambios se envían en lotes y la lista se consulta solo con la app a la vista.
 
 export const SHARE_HASH = "#lista=";
-const SHARED_KEY = "shared-list:v1";
 const ID_RE = /^[A-Za-z0-9_-]{22}$/;
 const MAX_BATCH = 50;
 
 export type SyncStatus = "local" | "syncing" | "synced" | "offline" | "error" | "limit" | "gone";
 
-type SharedState = {
+export type SharedState = {
     id: string,
     version: number,
     base: orderItem[],
@@ -134,34 +132,19 @@ export function takeShareFromHash(): string | null {
 
 // ---------- Almacenamiento en el móvil ----------
 
-export function loadShared(): SharedState | null {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(SHARED_KEY) || "null");
-        if (!parsed || typeof parsed !== "object" || !ID_RE.test(parsed.id)) return null;
-        return {
-            id: parsed.id,
-            version: Number(parsed.version) || 0,
-            base: Array.isArray(parsed.base) ? parsed.base : [],
-            pending: Array.isArray(parsed.pending) ? parsed.pending : [],
-            batch: parsed.batch && typeof parsed.batch.id === "string" ? parsed.batch : undefined,
-        };
-    } catch {
-        return null;
-    }
+// Comprueba lo guardado de una lista compartida (lo escribe la propia app, pero por si acaso)
+export function parseSharedState(raw: unknown): SharedState | null {
+    if (!raw || typeof raw !== "object") return null;
+    const parsed = raw as Record<string, unknown>;
+    if (typeof parsed.id !== "string" || !ID_RE.test(parsed.id)) return null;
+    return {
+        id: parsed.id,
+        version: Number(parsed.version) || 0,
+        base: Array.isArray(parsed.base) ? parsed.base as orderItem[] : [],
+        pending: Array.isArray(parsed.pending) ? parsed.pending as ListOp[] : [],
+        batch: parsed.batch && typeof (parsed.batch as { id?: unknown }).id === "string" ? parsed.batch as { id: string, count: number } : undefined,
+    };
 }
-
-function saveShared(state: SharedState | null) {
-    if (state) saveImportant(SHARED_KEY, JSON.stringify(state));
-    else {
-        try {
-            localStorage.removeItem(SHARED_KEY);
-        } catch {
-            // nada que borrar
-        }
-    }
-}
-
-export const sharedId = (): string | null => loadShared()?.id ?? null;
 
 // ---------- Motor de sincronización ----------
 
@@ -178,6 +161,8 @@ export function pollInterval(idleMs: number): number {
 type EngineEvents = {
     onOrder: (order: orderItem[]) => void,
     onStatus: (status: SyncStatus, detail?: { lastSync?: number }) => void,
+    // Guarda el estado de la lista compartida (la capa de listas decide bajo qué clave)
+    onPersist: (state: SharedState) => void,
 };
 
 export class SyncEngine {
@@ -197,7 +182,7 @@ export class SyncEngine {
     constructor(state: SharedState, events: EngineEvents) {
         this.state = state;
         this.events = events;
-        saveShared(this.state);
+        this.events.onPersist(this.state);
         document.addEventListener("visibilitychange", this.onVisible);
         window.addEventListener("online", this.onOnline);
         this.emit();
@@ -218,7 +203,7 @@ export class SyncEngine {
     }
 
     private persist() {
-        saveShared(this.state);
+        this.events.onPersist(this.state);
     }
 
     push(op: ListOp) {
@@ -349,7 +334,6 @@ export class SyncEngine {
         // se deja de compartir y lo que se ve se queda en este móvil
         const view = this.view();
         this.stop();
-        saveShared(null);
         this.events.onOrder(view);
         this.events.onStatus("gone");
     }
@@ -358,8 +342,4 @@ export class SyncEngine {
 // Datos para empezar a sincronizar una lista recién creada o a la que uno se une
 export function newSharedState(id: string, version: number, base: orderItem[], pending: ListOp[] = []): SharedState {
     return { id, version, base, pending };
-}
-
-export function stopSharing() {
-    saveShared(null);
 }

@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, CheckCheck, Heart, LayoutGrid, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Plus, RefreshCw, Search, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList from "./hooks/useList"
@@ -30,9 +30,10 @@ import { MoveBanner, MoveImport, MoveResult } from "./components/Move.tsx"
 import AddStoreProduct from "./components/AddStoreProduct.tsx"
 import LoadingProducts from "./components/LoadingProducts.tsx"
 import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
+import MyLists from "./components/MyLists.tsx"
+import { MAX_LISTS } from "./helpers/lists"
 import { takeShareFromHash } from "./helpers/sync"
 import { flyToList } from "./helpers/flyToList"
-import type { JoinMode } from "./hooks/useList"
 import { isNewHost, isOldHost } from "./helpers/move"
 
 type Source = "todo" | "favoritos" | "mercadona"
@@ -97,7 +98,7 @@ const itemDetail = (item: listItem) =>
   [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
-  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, leave, myName, setMyName } = useList();
+  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, isJoined, leave, myName, setMyName, lists, currentId, currentName, openList, newList, renameList, deleteList, summaries } = useList();
   const { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
@@ -367,7 +368,6 @@ function App() {
     setRemovedStore(null);
   };
 
-  const closeList = useCallback(() => setListOpen(false), []);
   // Ficha: de un producto se puede pasar a un parecido más barato y volver; se guarda el recorrido
   const [detailTrail, setDetailTrail] = useState<listItem[]>([]);
   const [detailNavigated, setDetailNavigated] = useState<boolean>(false);
@@ -625,7 +625,28 @@ function App() {
   // ---------- Lista compartida ----------
 
   const [shareOpen, setShareOpen] = useState<boolean>(false);
+  // Escritorio: "Mis listas" es una hoja aparte. Móvil: la MISMA hoja de la lista cambia entre ver la lista
+  // y ver "Mis listas" (una sola hoja = una sola entrada en el historial, sin líos con el botón "atrás").
+  const [listsOpen, setListsOpen] = useState<boolean>(false);
+  const [mobileView, setMobileView] = useState<"list" | "lists">("list");
   const noop = useCallback(() => undefined, []);
+  const closeMyLists = useCallback(() => setListsOpen(false), []);
+  const closeMobileList = useCallback(() => { setListOpen(false); setMobileView("list"); }, []);
+  const openMyLists = useCallback(() => {
+    if (isDesktop) setListsOpen(true);
+    else setMobileView("lists");
+  }, [isDesktop]);
+  // Entrar en una lista desde "Mis listas": pasa a ser la actual
+  const enterList = useCallback((id: string) => {
+    openList(id);
+    if (isDesktop) setListsOpen(false);
+    else setMobileView("list");
+  }, [openList, isDesktop]);
+  const createAndOpen = useCallback((name: string) => {
+    newList(name);
+    if (isDesktop) setListsOpen(false);
+    else setMobileView("list");
+  }, [newList, isDesktop]);
   const closeShare = useCallback(() => setShareOpen(false), []);
   // Invitación: al abrir un enlace "…/#lista=código" (al arrancar o con la app ya abierta) o al pegarlo
   const [invite, setInvite] = useState<string | null>(null);
@@ -644,12 +665,13 @@ function App() {
     announce("Lista compartida. Envía el enlace a quien quieras.");
     return id;
   };
-  const joinList = async (mode: JoinMode) => {
+  const joinList = async () => {
     if (!invite) return;
-    const count = await join(invite, mode);
+    const count = await join(invite);
     setInvite(null);
     setShareOpen(false);
-    announce(`Te has unido a la lista compartida: ${count} ${count === 1 ? "producto" : "productos"}.`);
+    if (!isDesktop) { setMobileView("list"); setListOpen(true); }
+    announce(`Lista compartida abierta: ${count} ${count === 1 ? "producto" : "productos"}.`);
   };
   const leaveList = () => {
     leave();
@@ -663,10 +685,31 @@ function App() {
   const listPanel = (withHeader: boolean) => (
     <div className="flex h-full flex-col bg-surface">
       {withHeader && (
-        <div className="flex items-baseline justify-between gap-3 px-4 py-3 border-b border-border">
-          <h2 className="text-lg font-bold">Tu lista</h2>
-          <span className="text-sm text-muted tabular">{lineCount} {lineCount === 1 ? "producto" : "productos"}</span>
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold break-words">{currentName}</h2>
+            <span className="text-sm text-muted tabular">{lineCount} {lineCount === 1 ? "producto" : "productos"}</span>
+          </div>
+          <button
+            type="button"
+            onClick={openMyLists}
+            className="flex-none h-11 px-3 inline-flex items-center gap-1.5 rounded-pill border border-border text-base font-semibold hover:bg-surface-sunk"
+          >
+            <LayoutList size={18} aria-hidden="true" />
+            Mis listas
+          </button>
         </div>
+      )}
+      {/* En la hoja de móvil (sin cabecera) el acceso a "Mis listas" va arriba del todo */}
+      {!withHeader && (
+        <button
+          type="button"
+          onClick={openMyLists}
+          className="flex min-h-11 items-center gap-1.5 px-4 text-base font-semibold text-accent-strong border-b border-border hover:bg-surface-sunk"
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+          Mis listas
+        </button>
       )}
       <ShareRow shared={sharedListId !== null} status={syncStatus} onOpen={() => setShareOpen(true)} />
       <div className="flex-1 overflow-y-auto">
@@ -1084,7 +1127,7 @@ function App() {
         </main>
 
         {/* Lista: columna fija en escritorio */}
-        <aside className="hidden md:block" aria-label="Tu lista">
+        <aside className="hidden md:block" aria-label={`Lista: ${currentName}`}>
           <div data-list-target className="sticky top-[136px] mt-4 h-[calc(100vh-152px)] overflow-hidden rounded-lg border border-border shadow-pop">
             {listPanel(true)}
           </div>
@@ -1130,7 +1173,7 @@ function App() {
           </div>
           <button
             type="button"
-            onClick={() => setListOpen(true)}
+            onClick={() => { setMobileView("list"); setListOpen(true); }}
             aria-haspopup="dialog"
             data-list-target
             className="flex-none w-[84px] max-[389px]:w-[76px] max-[359px]:w-[68px] h-14 flex flex-col items-center justify-center gap-0.5 rounded-md bg-accent text-on-accent"
@@ -1152,8 +1195,37 @@ function App() {
 
       <BackToTop focusTargetId="app-title" />
 
-      <Sheet open={listOpen} title={`Tu lista (${lineCount})`} onClose={closeList} variant="full">
-        {listPanel(false)}
+      {/* Escritorio: "Mis listas" en su propia hoja */}
+      <Sheet open={listsOpen} title="Mis listas" onClose={closeMyLists}>
+        <MyLists
+          lists={summaries()}
+          currentId={currentId}
+          canAdd={lists.length < MAX_LISTS}
+          onOpen={enterList}
+          onNew={createAndOpen}
+          onRename={renameList}
+          onDelete={deleteList}
+        />
+      </Sheet>
+
+      {/* Móvil: una sola hoja que enseña la lista o "Mis listas" */}
+      <Sheet
+        open={listOpen}
+        title={mobileView === "lists" ? "Mis listas" : `${currentName} (${lineCount})`}
+        onClose={closeMobileList}
+        variant="full"
+      >
+        {mobileView === "lists" ? (
+          <MyLists
+            lists={summaries()}
+            currentId={currentId}
+            canAdd={lists.length < MAX_LISTS}
+            onOpen={enterList}
+            onNew={createAndOpen}
+            onRename={renameList}
+            onDelete={deleteList}
+          />
+        ) : listPanel(false)}
         {!detailItem && <p role="status" aria-live="polite" className="sr-only">{announcement}</p>}
       </Sheet>
 
@@ -1179,9 +1251,7 @@ function App() {
       <Sheet open={invite !== null} title="Lista compartida" onClose={closeInvite}>
         {invite && (
           <JoinPanel
-            inviteId={invite}
-            currentSharedId={sharedListId}
-            localCount={order.length}
+            alreadyIn={isJoined(invite)}
             myName={myName}
             onName={setMyName}
             onJoin={joinList}
