@@ -477,3 +477,12 @@ Pedido por el dueño: las mínimas peticiones a Mercadona (copia en la base de d
 - El botón de abajo enseña el nombre de la lista abierta cuando hay varias (para saber adónde va lo que se añade); con una sola sigue enseñando el total.
 - Las etiquetas «abierta»/«fijada» van en su propia línea (en 360 px se partían a mitad de palabra).
 - Pruebas: e2e34 33/33 nuevas, regresión completa, `dbcache.mjs` 31/31 a 24 h.
+
+## 2026-10-23 · La cesta enseña las listas si alguna está compartida
+
+Pedido por el dueño: si hay listas compartidas, al tocar la cesta debe verse la lista de listas (aunque sea una sola); si no hay ninguna compartida, se queda su lista por defecto.
+
+- Botón de la cesta (móvil): lista fijada → se abre directa. Si no: **varias listas, o alguna compartida (aunque sea una sola) → «Mis listas»**; una sola lista no compartida → se abre directa.
+- Compartida y fijada: se abre directa. Al dejar de compartir la única lista, vuelve a abrirse directa.
+- Interpretación mía, a confirmar: con varias listas sin compartir y ninguna fijada se siguen viendo todas (lo pedido antes: «si tenemos 4 listas vemos las 4»).
+- Pruebas: e2e34 42/42 (9 nuevas) + regresión completa.

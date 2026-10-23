@@ -98,7 +98,7 @@ const itemDetail = (item: listItem) =>
   [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
-  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, isJoined, leave, myName, setMyName, lists, pinnedId, pinList, currentId, currentName, openList, newList, renameList, deleteList, summaries } = useList();
+  const { order, addItem, decreaseItem, removeItem, setDone, refreshOrder, clearOrder, restoreOrder, sharedListId, syncStatus, share, join, isJoined, leave, myName, setMyName, lists, hasSharedList, pinnedId, pinList, currentId, currentName, openList, newList, renameList, deleteList, summaries } = useList();
   const { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
@@ -638,15 +638,13 @@ function App() {
     setMobileView("list");
     if (pinnedId && currentId !== pinnedId) openList(pinnedId);
   }, [pinnedId, currentId, openList]);
-  // Botón «Lista» de la barra de abajo: con una lista fijada (o una sola lista) se abre directa;
-  // con varias y ninguna fijada, se ven todas para elegir.
+  // Botón «Lista» de la barra de abajo: con una lista fijada se abre directa. Si no, se ven todas las listas
+  // para elegir cuando hay varias o alguna está compartida (aunque sea una sola); y si solo hay una, que es
+  // la de este móvil, se abre directa (la lista de siempre).
+  const showAllLists = !pinnedId && (lists.length > 1 || hasSharedList);
   const openFromBar = () => {
-    if (pinnedId) {
-      if (currentId !== pinnedId) openList(pinnedId);
-      setMobileView("list");
-    } else {
-      setMobileView(lists.length > 1 ? "lists" : "list");
-    }
+    if (pinnedId && currentId !== pinnedId) openList(pinnedId);
+    setMobileView(showAllLists ? "lists" : "list");
     setListOpen(true);
   };
   const openMyLists = useCallback(() => {
@@ -1221,7 +1219,7 @@ function App() {
               </span>
             </span>
             <span className="sr-only">
-              {lists.length > 1 && !pinnedId ? `Ver mis listas (abierta: ${currentName})` : lists.length > 1 ? `Ver lista ${currentName}` : "Ver lista"}, {lineCount} {lineCount === 1 ? "producto" : "productos"}{total > 0 && lists.length === 1 ? "," : ""}
+              {showAllLists ? `Ver mis listas (abierta: ${currentName})` : lists.length > 1 ? `Ver lista ${currentName}` : "Ver lista"}, {lineCount} {lineCount === 1 ? "producto" : "productos"}{total > 0 && lists.length === 1 ? "," : ""}
             </span>
             {lists.length > 1
               ? <span aria-hidden="true" className="block max-w-full truncate px-1 text-sm font-extrabold leading-tight">{currentName}</span>
