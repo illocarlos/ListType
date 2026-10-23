@@ -111,7 +111,7 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom" }: SheetProp
     const titleId = `sheet-${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-title`;
     const panelShape = variant === "full"
         ? "inset-0 safe-top md:pt-0 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[440px] md:max-h-[85vh] md:rounded-lg"
-        : "inset-x-0 bottom-0 rounded-t-lg md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[440px] md:rounded-lg";
+        : "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-lg md:max-h-[85vh] md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[440px] md:rounded-lg";
 
     return (
         <div className="fixed inset-0 z-50">

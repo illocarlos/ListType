@@ -343,3 +343,37 @@ Pedido por el dueño: que se vea una pantalla de carga si los productos aún no 
   - Ahora una respuesta cortada cuenta como "sin conexión" y no pausa. Una respuesta que llega entera pero con datos rotos sigue pausando, como antes.
   - Reproducido en `main` (pausa) y comprobado tras el arreglo (sin pausa).
 - Pruebas: 24/24 nuevas (respuestas de Mercadona retenidas a mano para ver cada carga, su final y el fallo; zona nueva; reducir movimiento; respuesta cortada frente a JSON roto; escritorio; axe) + regresión completa.
+
+## 2026-10-23 · Lista compartida entre varios móviles (y tachar lo que ya está en el carro)
+
+Pedido por el dueño: que 2, 3 o 4 móviles tengan la misma lista, "como Tricount". Elegido: compartir solo la lista (los favoritos siguen siendo de cada móvil) y poder tachar al comprar. Condición: que sea totalmente gratis.
+
+- **Coste cero comprobado** con el acceso a Vercel:
+  - La cuenta está en Hobby, sin datos de facturación y con el cobro por exceso desactivado.
+  - El plan Free de Upstash en el Marketplace tiene `paymentMethodRequired: false` y preautorización de 0 $; todos los planes de pago exigen tarjeta.
+  - En Hobby, superar un límite pausa la función, no cobra.
+- **Servidor** (`api/lista.js`, Upstash Redis por su API REST):
+  - Sin cuentas: la lista se identifica con un código al azar de 22 caracteres (128 bits); quien tiene el enlace la ve y la cambia.
+  - Se guardan solo productos, cantidades y lo que está en el carro. Caduca a los 90 días sin cambios.
+  - Todo va por POST (el código no queda en la dirección ni en los registros).
+  - Los cambios se envían como operaciones (añadir, restar, quitar, tachar, vaciar, deshacer), no como la lista entera: si dos personas pulsan + a la vez, cuentan los dos.
+  - Restar nunca baja de 1 aunque dos "−" lleguen a la vez.
+  - Cada envío lleva un identificador: si se corta la cobertura tras guardarse y el móvil reintenta, no se aplica dos veces.
+  - Límites: 300 productos, 50 cambios por envío, 100 KB por petición.
+  - Lo que llega se limpia campo a campo: solo fotos de Mercadona (otra dirección serviría para saber quién abre la lista), precios con sentido y campos conocidos.
+  - Una lista inventada no se crea al escribir en ella (404).
+  - Acepta las variables de Upstash con cualquier nombre que ponga Vercel (también con prefijo). `GET /api/lista` solo dice si está conectada.
+- **Móvil** (`helpers/sync.ts`, `helpers/listOps.ts`, `useList`):
+  - Lo que se ve es la última lista del servidor más los cambios aún sin enviar: se ve al momento y funciona sin cobertura. Al volver la conexión se envía todo.
+  - Consulta "¿ha cambiado algo?" (1 sola operación de Upstash) solo con la app a la vista: cada 4 s si se acaba de usar, luego 10 s, 30 s y 60 s. En segundo plano, nada.
+  - Si la lista desaparece del servidor, se avisa y la lista se queda en el móvil.
+- **Pantallas**:
+  - En la cabecera de la lista: "Solo en este móvil" o "Compartida · Al día / Sin conexión…", y el botón Compartir.
+  - Hoja Compartir: crear enlace, enviarlo por WhatsApp o copiarlo, dejar de compartir (con confirmación) y "¿Te han pasado un enlace?" para pegarlo. Esto último hace falta en el iPhone con la app en la pantalla de inicio, porque el enlace se abre en Safari.
+  - Al abrir un enlace: unirse juntando tus productos, unirse sin ellos, o cambiarse desde otra lista compartida.
+  - **Casilla "en el carro"** en cada producto (también sin compartir). Lo tachado baja a "En el carro", sin botones de cantidad. "Quitar lo del carro" se puede deshacer, igual que "Vaciar la lista". En el PDF sale marcado y en WhatsApp con ☑.
+- **Gasto estimado** con 4 móviles: unas 25.000 llamadas al mes a las funciones (el límite gratis es 1.000.000, compartido con Mercadona) y unas 50.000 operaciones de Upstash (el límite es 500.000).
+- **Pruebas**:
+  - Servidor: 47/47 contra un emulador local de Upstash (fakeredis con la misma API REST).
+  - App: 49/49 con 5 móviles simulados (crear, unirse juntando o no, pegar enlace, cambios cruzados, + a la vez, tachar, sin conexión, dejar de compartir, vaciar y deshacer, quitar lo del carro, recarga, consumo a la vista y en segundo plano, reintento sin duplicar, lista borrada, enlace malo, sin base de datos, axe).
+  - Regresión completa.

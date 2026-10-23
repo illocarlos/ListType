@@ -18,7 +18,11 @@ export type listItem = {
 
 
 export type orderItem = listItem & {
-    quantity: number
+    quantity: number,
+    // Ya está en el carro (tachado en la tienda)
+    done?: boolean,
+    // Cuándo se apuntó (ms): fija el orden de la lista en todos los móviles cuando se comparte
+    addedAt?: number
 }
 
 export type ItemCategory = Array<string>;
