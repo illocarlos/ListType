@@ -12,6 +12,17 @@ function saveOrder(order: orderItem[]) {
 
 export type JoinMode = "merge" | "replace";
 
+// Nombre con el que este móvil firma lo que apunta en una lista compartida ("Apuntado por Ana")
+const NAME_KEY = "shared-name:v1";
+const loadName = (): string => {
+    try {
+        return (localStorage.getItem(NAME_KEY) || "").slice(0, 30);
+    } catch {
+        return "";
+    }
+};
+export const cleanName = (text: string) => text.trim().replace(/\s+/g, " ").slice(0, 30);
+
 export default function useList() {
 
     // Inicializar el estado order con lo guardado en localStorage (o vacío)
@@ -57,6 +68,24 @@ export default function useList() {
         };
     }, [startEngine]);
 
+    const [myName, setMyNameState] = useState<string>(loadName);
+    const nameRef = useRef<string>(myName);
+    const setMyName = useCallback((text: string) => {
+        const name = cleanName(text);
+        nameRef.current = name;
+        setMyNameState(name);
+        if (name) saveImportant(NAME_KEY, name);
+        else {
+            try {
+                localStorage.removeItem(NAME_KEY);
+            } catch {
+                // nada que borrar
+            }
+        }
+    }, []);
+    // Lo que solo estaba en este móvil, al pasar a la lista compartida, va firmado por quien comparte o se une
+    const signed = useCallback((items: orderItem[]) => items.map(item => item.addedBy || !nameRef.current ? item : { ...item, addedBy: nameRef.current }), []);
+
     // Guardar order en localStorage cada vez que cambie
     useEffect(() => {
         saveOrder(order);
@@ -64,8 +93,11 @@ export default function useList() {
 
     // Todos los cambios pasan por aquí: en una lista compartida se envían; si no, solo cambian el móvil
     const change = useCallback((op: ListOp) => {
-        if (engineRef.current) engineRef.current.push(op);
-        else setOrder(previous => applyOp(previous, op));
+        if (engineRef.current) {
+            // En la lista compartida, lo que se apunta va con el nombre de quien lo apunta
+            const name = nameRef.current;
+            engineRef.current.push(op.op === "add" && name && !op.item.addedBy ? { op: "add", item: { ...op.item, addedBy: name } } : op);
+        } else setOrder(previous => applyOp(previous, op));
     }, []);
 
     const addItem = useCallback((item: listItem) => change({ op: "add", item }), [change]);
@@ -105,21 +137,21 @@ export default function useList() {
 
     // Crea la lista compartida con lo que ya hay en este móvil
     const share = useCallback(async () => {
-        const created = await createShared(withAddedAt(order));
+        const created = await createShared(signed(withAddedAt(order)));
         startEngine(newSharedState(created.id, created.version, created.items));
         return created.id;
-    }, [order, startEngine]);
+    }, [order, startEngine, signed]);
 
     // Unirse a una lista de otro móvil. "merge": lo que solo estaba en este móvil se añade a la compartida;
     // "replace": se usa la compartida tal cual (lo de este móvil se descarta)
     const join = useCallback(async (id: string, mode: JoinMode) => {
         const remote = await fetchShared(id, 0);
         const remoteIds = new Set(remote.items.map(item => item.id));
-        const onlyHere = withAddedAt(order).filter(item => !remoteIds.has(item.id));
+        const onlyHere = signed(withAddedAt(order)).filter(item => !remoteIds.has(item.id));
         const pending: ListOp[] = mode === "merge" && onlyHere.length ? [{ op: "restore", items: onlyHere.slice(0, 300) }] : [];
         startEngine(newSharedState(id, remote.version, remote.items, pending));
         return applyOps(remote.items, pending).length;
-    }, [order, startEngine]);
+    }, [order, startEngine, signed]);
 
     // Deja de compartir en este móvil: la lista se queda aquí tal como está y los demás siguen con la suya
     const leave = useCallback(() => {
@@ -145,5 +177,7 @@ export default function useList() {
         share,
         join,
         leave,
+        myName,
+        setMyName,
     };
 }

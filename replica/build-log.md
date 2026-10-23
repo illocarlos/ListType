@@ -390,3 +390,14 @@ Dos defensas añadidas:
 Pruebas: 14/14 de seguridad (CSRF desde otra web y en Safari viejo, la app propia sí pasa, tope por IP, otra IP no afectada, no se puede falsear la IP, leer sin límite, caducidad de los contadores) + regresión completa e2e3–e2e30 + servidor 49/49.
 
 Pendiente (fuera del código): en Vercel hay una regla de firewall de 400 peticiones/60 s por IP sobre `/api/`. Conviene mantenerla; el tope de la app es ahora la protección real del gasto.
+
+## 2026-10-23 · Quién apuntó cada producto (lista compartida)
+
+Pedido por el dueño: que en la lista compartida se vea el nombre de quien añadió cada producto.
+
+- Al compartir o al unirse se pide **«Tu nombre»** (opcional). Se guarda en el móvil y se puede cambiar luego en la hoja Compartir.
+- Cada producto de la lista muestra **«Apuntado por Ana»**. Manda quien lo apuntó primero: si otro le suma una unidad, no cambia.
+- Lo que ya había en el móvil al compartir o al unirse va firmado por esa persona. Sin nombre, se apunta sin firma.
+- El servidor guarda el nombre como un campo más del producto (máximo 30 caracteres, solo texto). Es el único dato de una persona que se guarda, y solo si lo escribe.
+- Un nombre con código se pinta como texto (React lo escapa).
+- Pruebas: 14/14 nuevas con dos móviles simulados + servidor 50/50 + regresión completa.

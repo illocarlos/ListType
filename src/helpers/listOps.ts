@@ -21,6 +21,7 @@ export function wireItem(item: listItem & { addedAt?: number }): listItem & { ad
     if (item.isNew) out.isNew = true;
     if (item.byWeight) out.byWeight = true;
     if (item.store) out.store = item.store;
+    if (item.addedBy) out.addedBy = item.addedBy;
     if (item.addedAt) out.addedAt = item.addedAt;
     return out;
 }
