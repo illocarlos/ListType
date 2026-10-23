@@ -28,6 +28,7 @@ import AppUpdate from "./components/AppUpdate.tsx"
 import Collapsible from "./components/Collapsible.tsx"
 import BackToTop from "./components/BackToTop.tsx"
 import { MoveBanner, MoveImport, MoveResult } from "./components/Move.tsx"
+import AddStoreProduct from "./components/AddStoreProduct.tsx"
 import { isNewHost, isOldHost } from "./helpers/move"
 
 type Source = "todo" | "favoritos" | "mercadona"
@@ -87,12 +88,13 @@ function groupByAisle(products: SearchableProduct[], sectionOf: (product: Search
   return [...groups.entries()];
 }
 
+// Los de otra tienda llevan delante el nombre de la tienda ("Lidl")
 const itemDetail = (item: listItem) =>
-  [item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
+  [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ") || item.type;
 
 function App() {
   const { order, addItem, decreaseItem, removeItem, refreshOrder, clearOrder, restoreOrder } = useList();
-  const { favorites, isFavorite, toggleFavorite, refreshFavorites } = useFavorites();
+  const { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites } = useFavorites();
   const mercadona = useMercadona();
 
   const [query, setQuery] = useState<string>("");
@@ -211,7 +213,8 @@ function App() {
     if (!term) return [];
     const { matches, score } = makeMatcher(term);
     return favorites
-      .map(item => ({ item, name: normalizeText(item.name) }))
+      // Los de otra tienda también salen buscando la tienda ("lidl")
+      .map(item => ({ item, name: normalizeText(item.store ? `${item.name} ${item.store}` : item.name) }))
       .filter(entry => matches(entry.name))
       .sort((a, b) => score(a.name) - score(b.name) || a.name.localeCompare(b.name, "es", { numeric: true }))
       .map(entry => entry.item);
@@ -300,15 +303,59 @@ function App() {
     const hadFocus = Boolean(row && document.activeElement && row.contains(document.activeElement));
     const neighbour = (row?.nextElementSibling ?? row?.previousElementSibling)?.getAttribute("data-row-id");
     const removing = isFavorite(item.id);
+    // Uno de otra tienda no se puede volver a buscar: se puede deshacer
+    if (removing && !item.mercadonaId) setRemovedStore({ item, index: favorites.findIndex(favorite => favorite.id === item.id) });
     toggleFavorite(item);
     if (!removing) return;
-    announce(`${item.name}: quitado de favoritos.`);
+    announce(`${item.name}: quitado de favoritos.${item.mercadonaId ? "" : " Puedes deshacerlo."}`);
     if (!hadFocus) return;
     window.requestAnimationFrame(() => {
       if (row?.isConnected) return;
       const next = neighbour ? document.querySelector<HTMLButtonElement>(`[data-row-id="${neighbour}"] button[aria-pressed]`) : null;
       (next ?? document.getElementById("favorites-title"))?.focus();
     });
+  };
+
+  // ---------- Productos de otra tienda (en favoritos) ----------
+
+  const [storeFormOpen, setStoreFormOpen] = useState<boolean>(false);
+  const storeButtonRef = useRef<HTMLButtonElement>(null);
+  const focusSavedRow = useRef<number | null>(null);
+  const [removedStore, setRemovedStore] = useState<{ item: listItem, index: number } | null>(null);
+  const takenIds = useMemo(
+    () => new Set([...favorites.map(item => item.id), ...order.map(item => item.id)]),
+    [favorites, order]
+  );
+  // El formulario y el "Deshacer" son de la pantalla actual: al cambiar de sección o buscar, se quitan
+  useEffect(() => {
+    setStoreFormOpen(false);
+    setRemovedStore(null);
+  }, [homeTab, searching]);
+  const saveStoreProduct = (item: listItem) => {
+    toggleFavorite(item);
+    setStoreFormOpen(false);
+    // Si hay una categoría elegida que no es la de esta tienda, se quita para que se vea el nuevo
+    if (selectedCheckbox && selectedCheckbox !== item.type) setSelectedCheckbox(null);
+    focusSavedRow.current = item.id;
+    announce(`Guardado en favoritos: ${item.name}, de ${item.store}.`);
+  };
+  const cancelStoreForm = () => {
+    setStoreFormOpen(false);
+    window.requestAnimationFrame(() => storeButtonRef.current?.focus());
+  };
+  // Tras guardar, el foco va al botón + del nuevo favorito (y la pantalla baja hasta él)
+  useEffect(() => {
+    const id = focusSavedRow.current;
+    if (id === null) return;
+    focusSavedRow.current = null;
+    document.querySelector<HTMLButtonElement>(`:is(#panel-favoritos, #search-results) [data-row-id="${id}"] button[aria-label^="Añadir"]`)?.focus();
+  }, [favorites, selectedCheckbox]);
+  const undoRemoveStore = () => {
+    if (!removedStore) return;
+    restoreFavorite(removedStore.item, removedStore.index);
+    announce(`${removedStore.item.name}: vuelve a estar en favoritos.`);
+    focusSavedRow.current = removedStore.item.id;
+    setRemovedStore(null);
   };
 
   const closeList = useCallback(() => setListOpen(false), []);
@@ -407,6 +454,22 @@ function App() {
 
 
   // ---------- Piezas ----------
+
+  const removedStoreBox = removedStore && (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md bg-highlight p-3 text-on-highlight">
+      <p className="text-base font-semibold">
+        Has quitado «{removedStore.item.name}» de favoritos.
+      </p>
+      <button
+        type="button"
+        onClick={undoRemoveStore}
+        className="h-11 px-4 inline-flex items-center gap-2 rounded-md bg-surface text-text text-base font-semibold"
+      >
+        <Undo2 size={20} aria-hidden="true" />
+        Deshacer
+      </button>
+    </div>
+  );
 
   const favoriteRow = (item: listItem) => (
     <ProductRow
@@ -648,12 +711,14 @@ function App() {
           <p role="status" aria-live="polite" className="sr-only">{resultsAnnouncement}</p>
           <p role="status" aria-live="polite" className="sr-only">{manualAdded}</p>
           {searching ? (
-            <div>
+            <div id="search-results">
               <div className="-mx-4 px-4 mb-4 flex gap-2 overflow-x-auto" role="group" aria-label="Dónde buscar">
                 {sourceChip("todo", "Todo")}
                 {sourceChip("mercadona", "Mercadona", mercadonaResults.length)}
                 {sourceChip("favoritos", "Favoritos", favoriteResults.length)}
               </div>
+
+              {removedStoreBox}
 
               {showMercadona && catalogStatus}
 
@@ -830,21 +895,47 @@ function App() {
 
               {homeTab === "favoritos" && (
               <section id="panel-favoritos" role="tabpanel" aria-labelledby="tab-favoritos">
-                <div className="flex items-baseline justify-between gap-3 mb-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
                   <h2 id="favorites-title" tabIndex={-1} className="text-lg font-bold focus:outline-none focus-visible:outline-highlight">Tus favoritos</h2>
                   {favorites.length > 0 && (
                     <span className="text-sm text-muted tabular">{favorites.length}</span>
                   )}
+                  {/* Productos de otro supermercado o tienda (Lidl, la frutería…), apuntados a mano */}
+                  <button
+                    ref={storeButtonRef}
+                    type="button"
+                    onClick={() => storeFormOpen ? cancelStoreForm() : setStoreFormOpen(true)}
+                    aria-expanded={storeFormOpen}
+                    aria-controls={storeFormOpen ? "store-product-form" : undefined}
+                    className={`ml-auto flex-none h-11 px-3 inline-flex items-center gap-1.5 rounded-pill border-2 border-accent text-base font-semibold ${storeFormOpen ? "bg-accent-soft text-on-accent-soft" : "bg-surface text-accent-strong hover:bg-accent-soft"}`}
+                  >
+                    <Plus size={20} aria-hidden="true" />
+                    <span><span className="sr-only">Añadir producto de </span>Otra tienda</span>
+                  </button>
                 </div>
 
+                {storeFormOpen && (
+                  <AddStoreProduct
+                    id="store-product-form"
+                    favorites={favorites}
+                    takenIds={takenIds}
+                    onSave={saveStoreProduct}
+                    onCancel={cancelStoreForm}
+                  />
+                )}
+                {removedStoreBox}
+
                 {favorites.length === 0 ? (
-                  <div className="rounded-md bg-surface p-6 text-center">
-                    <Heart size={28} aria-hidden="true" className="mx-auto text-danger" />
-                    <p className="mt-2 font-semibold">Aún no tienes favoritos</p>
-                    <p className="text-sm text-muted mt-1">
-                      Busca un producto de Mercadona y toca el corazón: aparecerá aquí para añadirlo a la lista de un toque.
-                    </p>
-                  </div>
+                  !storeFormOpen && (
+                    <div className="rounded-md bg-surface p-6 text-center">
+                      <Heart size={28} aria-hidden="true" className="mx-auto text-danger" />
+                      <p className="mt-2 font-semibold">Aún no tienes favoritos</p>
+                      <p className="text-sm text-muted mt-1">
+                        Busca un producto de Mercadona y toca el corazón: aparecerá aquí para añadirlo a la lista de un toque.
+                        {" "}Lo de otras tiendas, con el botón «Otra tienda».
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <>
                     {favoritesOnSale.length > 0 && (

@@ -307,3 +307,20 @@ Aprobado por el dueño tras el segundo análisis: los tres fallos de prioridad a
   - Sin ventana de confirmar: sale "Has vaciado la lista (N productos)" con **Deshacer**, que tiene el foco.
   - Deshacer devuelve todo con sus cantidades. Deja de ofrecerse en cuanto se apunta algo nuevo.
 - Pruebas: 30/30 nuevas + regresión completa (e2e3–e2e27, incluidas la barra y la mudanza); auditoría con 0 problemas axe. Se adaptaron dos comprobaciones del PDF al nuevo formato: los nombres ocupan varias líneas y la cantidad va aparte.
+
+## 2026-10-23 · Favoritos de otra tienda
+
+Pedido por el dueño: poder guardar en favoritos productos de otro supermercado.
+
+- En Favoritos, junto al título, un botón **"+ Otra tienda"** abre un formulario en la misma pantalla (sin ventana nueva):
+  - Nombre del producto (obligatorio), tienda y precio aproximado (los dos opcionales).
+  - La tienda sugiere las ya usadas y las más comunes (Lidl, Carrefour, Dia, Aldi, frutería…). Vacía queda como "Otra tienda".
+  - El precio vale con coma o punto ("2,40", "2.40 €"). Vacío = sin precio, como lo apuntado a mano.
+  - Avisa si ya existe el mismo producto en la misma tienda; el mismo nombre en otra tienda sí se puede guardar.
+  - Los errores se leen en voz alta y el foco va al campo que falla. Escape o Cancelar cierran y devuelven el foco al botón.
+- Se guardan como lo apuntado a mano (sin foto ni ficha, sin llamadas a Mercadona) con un campo `store` nuevo. La tienda hace de categoría en los favoritos y sale debajo del nombre en favoritos, lista, PDF y WhatsApp ("☐ 1 × Pan de pueblo · Panadería").
+- Buscar el nombre de la tienda ("lidl") encuentra sus productos; los plurales funcionan igual que con los de Mercadona.
+- Quitar uno de otra tienda con el corazón no se puede recuperar buscándolo, así que sale **Deshacer** (vuelve a su sitio). Para los de Mercadona no cambia nada.
+- La mudanza entre direcciones ya los lleva (se copian los favoritos enteros).
+- No hay editar: para cambiar el precio hay que quitarlo y volver a crearlo.
+- Pruebas: 49/49 nuevas (formulario, validación, lista, total, PDF, WhatsApp, deshacer, buscador, recarga, 320 px, escritorio y axe) + regresión completa.

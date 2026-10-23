@@ -6,6 +6,7 @@ const FAVORITES_KEY = "favorites";
 
 // Favoritos: copias de productos de Mercadona guardadas en localStorage.
 // Se guarda la copia entera (nombre, foto, precio…) para que se vean aunque Mercadona no responda.
+// También los de otras tiendas apuntados a mano (sin mercadonaId: no se actualizan solos).
 export default function useFavorites() {
     const [favorites, setFavorites] = useState<listItem[]>(() => {
         try {
@@ -32,6 +33,16 @@ export default function useFavorites() {
             : [...previous, item]);
     }, []);
 
+    // Deshacer: vuelve a poner un favorito quitado en el sitio donde estaba
+    const restoreFavorite = useCallback((item: listItem, index: number) => {
+        setFavorites(previous => {
+            if (previous.some(favorite => favorite.id === item.id)) return previous;
+            const next = [...previous];
+            next.splice(Math.min(Math.max(index, 0), next.length), 0, item);
+            return next;
+        });
+    }, []);
+
     // Actualiza precio, foto o formato de un favorito con datos más recientes de Mercadona
     const refreshFavorites = useCallback((fresh: Map<number, listItem>) => {
         setFavorites(previous => {
@@ -49,5 +60,5 @@ export default function useFavorites() {
         });
     }, []);
 
-    return { favorites, isFavorite, toggleFavorite, refreshFavorites };
+    return { favorites, isFavorite, toggleFavorite, restoreFavorite, refreshFavorites };
 }

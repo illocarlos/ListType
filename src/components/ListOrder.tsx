@@ -46,7 +46,7 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails }: 
     return (
         <ul ref={listRef} className="divide-y divide-border">
             {order.map(item => {
-                const detail = [item.packaging, item.unitPrice].filter(Boolean).join(" · ")
+                const detail = [item.store, item.packaging, item.unitPrice].filter(Boolean).join(" · ")
                 return (
                     <li key={item.id} data-row-id={item.id} className="flex gap-3 px-4 py-3">
                         <Thumb item={item} size="sm" />

@@ -11,7 +11,9 @@ export type listItem = {
     unitPrice?: string,
     isNew?: boolean,
     // Se vende a granel: el precio es por kilo y la cantidad son kilos aproximados
-    byWeight?: boolean
+    byWeight?: boolean,
+    // Producto de otra tienda (Lidl, la frutería…) guardado a mano en favoritos
+    store?: string
 }
 
 

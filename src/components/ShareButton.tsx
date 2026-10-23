@@ -9,7 +9,9 @@ function listAsText(order: orderItem[]): string {
     const lines = order.map(item => {
         const price = item.price > 0 ? ` (${formatCurrency(item.price * item.quantity)})` : "";
         const amount = item.byWeight ? `${item.quantity} kg aprox.` : `${item.quantity} ×`;
-        return `☐ ${amount} ${item.name}${price}`;
+        // Lo de otra tienda lleva la tienda detrás: "☐ 1 × Pan de pueblo · Panadería"
+        const store = item.store ? ` · ${item.store}` : "";
+        return `☐ ${amount} ${item.name}${store}${price}`;
     });
     const total = order.reduce((sum, item) => sum + item.price * item.quantity, 0);
     return [
