@@ -11,9 +11,10 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { credentials } from './_redis.js';
 
-// Una copia es "fresca" 12 h (igual que el CDN). Se conserva 2 días para poder servirla si Mercadona falla.
-export const FRESH_MS = 12 * 60 * 60 * 1000;
-export const KEEP_SECONDS = 2 * 24 * 60 * 60;
+// Una copia es "fresca" 24 h (a petición del dueño: Mercadona recibe como mucho una petición por ruta y almacén
+// al día). Se conserva 3 días para poder servirla si Mercadona falla.
+export const FRESH_MS = 24 * 60 * 60 * 1000;
+export const KEEP_SECONDS = 3 * 24 * 60 * 60;
 const LOCK_SECONDS = 20;
 const REDIS_TIMEOUT_MS = 1500;
 // Esta base de datos comparte con las listas compartidas los 500.000 comandos al mes del plan gratis.

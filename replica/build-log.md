@@ -461,3 +461,19 @@ Pedido por el dueño: para no multiplicar las peticiones a Mercadona, que el pri
 - Mercadona sigue viendo el mismo User-Agent y las mismas rutas; solo se guardan respuestas públicas del catálogo, nada de personas.
 - Pruebas: `proxytest/dbcache.mjs` 31/31 (1.000 consultas de 20 categorías → 20 peticiones a Mercadona; 10 a la vez → 1), proxy 5 pruebas, lista 50/50, seguridad 14/14, e2e30.
 - No medido: cuántas peticiones llegan de verdad a Mercadona en producción (sin acceso a los registros de Vercel).
+
+## 2026-10-23 · Mercadona cada 24 h y «Lista» enseña todas tus listas (con chincheta para fijar una)
+
+Pedido por el dueño: las mínimas peticiones a Mercadona (copia en la base de datos, renovada cada 24 h) y que al ir a «mi lista» se vean las listas que hay y se elija, con la opción de fijar una para dejarla abierta.
+
+**Mercadona**
+- La copia del catálogo en la base de datos y en el CDN pasa de 12 h a **24 h** (se conserva 3 días por si Mercadona falla). Mercadona recibe como mucho una petición por ruta y almacén al día.
+- Coste, dicho tal cual: un precio puede tener hasta ~49 h (24 h de la copia + 1 h de margen + 24 h de caché del móvil); antes ~37 h.
+
+**Listas**
+- Botón «Lista» de abajo (móvil): con **varias listas y ninguna fijada** abre «Mis listas» con todas para elegir; con **una fijada** abre esa directamente; con **una sola lista** se abre directa (como siempre; ver todas las de una sola no aportaba nada).
+- **Chincheta** en cada tarjeta de «Mis listas» y dentro de la lista (móvil y escritorio): `aria-pressed`, etiqueta «fijada». Solo una fijada a la vez; borrar la fijada la suelta.
+- Con una fijada, esa es siempre la que recibe lo de Favoritos: al cerrar la hoja tras mirar otra lista, vuelve a ser la abierta la fijada, y al abrir la app se empieza en ella. En escritorio la columna de la lista no vuelve sola.
+- El botón de abajo enseña el nombre de la lista abierta cuando hay varias (para saber adónde va lo que se añade); con una sola sigue enseñando el total.
+- Las etiquetas «abierta»/«fijada» van en su propia línea (en 360 px se partían a mitad de palabra).
+- Pruebas: e2e34 33/33 nuevas, regresión completa, `dbcache.mjs` 31/31 a 24 h.

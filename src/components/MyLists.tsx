@@ -1,13 +1,15 @@
 import { useId, useState } from "react";
-import { ChevronRight, Pencil, Plus, ShoppingBasket, Trash2, Users } from "lucide-react";
+import { ChevronRight, Pencil, Pin, Plus, ShoppingBasket, Trash2, Users } from "lucide-react";
 import { formatCurrency } from "../helpers/formatPrice";
 import type { ListSummary } from "../helpers/lists";
 
 type MyListsProps = {
     lists: ListSummary[],
     currentId: string,
+    pinnedId: string | null,
     canAdd: boolean,
     onOpen: (id: string) => void,
+    onPin: (id: string | null) => void,
     onNew: (name: string) => void,
     onRename: (id: string, name: string) => void,
     onDelete: (id: string) => void,
@@ -15,10 +17,12 @@ type MyListsProps = {
 
 // Una fila de "Mis listas": nombre, personas (si es compartida) y nº de productos + total.
 // El lápiz abre renombrar/borrar sin salir de la lista.
-const ListCard = ({ list, current, onOpen, onRename, onDelete, canDelete }: {
+const ListCard = ({ list, current, pinned, onOpen, onPin, onRename, onDelete, canDelete }: {
     list: ListSummary,
     current: boolean,
+    pinned: boolean,
     onOpen: () => void,
+    onPin: () => void,
     onRename: (name: string) => void,
     onDelete: () => void,
     canDelete: boolean,
@@ -43,10 +47,13 @@ const ListCard = ({ list, current, onOpen, onRename, onDelete, canDelete }: {
                 >
                     <ShoppingBasket size={24} aria-hidden="true" className="flex-none text-accent" />
                     <span className="min-w-0 flex-1">
-                        <span className="block font-bold text-base break-words">
-                            {list.name}
-                            {current && <span className="ml-2 align-[1px] rounded-pill bg-accent-soft px-2 text-sm font-semibold text-on-accent-soft">abierta</span>}
-                        </span>
+                        <span className="block font-bold text-base break-words">{list.name}</span>
+                        {(current || pinned) && (
+                            <span className="mt-1 flex flex-wrap gap-1">
+                                {current && <span className="whitespace-nowrap rounded-pill bg-accent-soft px-2 text-sm font-semibold text-on-accent-soft">abierta</span>}
+                                {pinned && <span className="whitespace-nowrap rounded-pill bg-highlight px-2 text-sm font-semibold text-on-highlight">fijada</span>}
+                            </span>
+                        )}
                         {list.shared && (
                             <span className="mt-0.5 flex items-center gap-1 text-sm text-accent-strong">
                                 <Users size={14} aria-hidden="true" className="flex-none" />
@@ -55,10 +62,19 @@ const ListCard = ({ list, current, onOpen, onRename, onDelete, canDelete }: {
                         )}
                         <span className="mt-0.5 block text-sm text-muted tabular">
                             {list.count === 0 ? "Vacía" : `${list.count} ${list.count === 1 ? "producto" : "productos"}`}
-                            {list.total > 0 && ` · ${formatCurrency(list.total)}`}
+                            {list.total > 0 && <span className="whitespace-nowrap"> · {formatCurrency(list.total)}</span>}
                         </span>
                     </span>
                     <ChevronRight size={20} aria-hidden="true" className="flex-none text-muted" />
+                </button>
+                <button
+                    type="button"
+                    onClick={onPin}
+                    aria-pressed={pinned}
+                    aria-label={pinned ? `Dejar de fijar ${list.name}` : `Fijar ${list.name}`}
+                    className={`flex-none w-12 grid place-items-center border-l border-border hover:bg-surface-sunk ${pinned ? "text-accent-strong bg-accent-soft" : "text-muted hover:text-text"}`}
+                >
+                    <Pin size={18} aria-hidden="true" className={pinned ? "fill-current" : ""} />
                 </button>
                 <button
                     type="button"
@@ -113,7 +129,7 @@ const ListCard = ({ list, current, onOpen, onRename, onDelete, canDelete }: {
     );
 };
 
-const MyLists = ({ lists, currentId, canAdd, onOpen, onNew, onRename, onDelete }: MyListsProps) => {
+const MyLists = ({ lists, currentId, pinnedId, canAdd, onOpen, onPin, onNew, onRename, onDelete }: MyListsProps) => {
     const [adding, setAdding] = useState<boolean>(false);
     const [name, setName] = useState<string>("");
     const newId = useId();
@@ -126,13 +142,16 @@ const MyLists = ({ lists, currentId, canAdd, onOpen, onNew, onRename, onDelete }
     };
     return (
         <div className="p-4">
+            <p className="mb-3 text-sm text-muted">Toca una lista para abrirla. La que fijes con la chincheta se abre directamente al tocar «Lista».</p>
             <ul className="space-y-3">
                 {lists.map(list => (
                     <ListCard
                         key={list.id}
                         list={list}
                         current={list.id === currentId}
+                        pinned={list.id === pinnedId}
                         onOpen={() => onOpen(list.id)}
+                        onPin={() => onPin(list.id === pinnedId ? null : list.id)}
                         onRename={newName => onRename(list.id, newName)}
                         onDelete={() => onDelete(list.id)}
                         canDelete={lists.length > 1 || list.count > 0 || list.shared || list.id !== currentId}
