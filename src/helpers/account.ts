@@ -29,6 +29,7 @@ const NAME_KEY = "shared-name:v1";
 const ZONE_KEY = "mercadona-zone:v1";
 const WAREHOUSE_KEY = "mercadona:v1:wh";
 const HISTORY_KEY = "price-history:v1";
+const STAMPS_KEY = "account:stamps";
 const GONE_DAYS = 60;
 
 type Section = Record<string, unknown>;
@@ -147,13 +148,42 @@ export function hashOf(value: unknown): string {
     return `${(h2 >>> 0).toString(16)}${(h1 >>> 0).toString(16)}:${text.length}`;
 }
 
-// ---------- Datos locales <-> secciones ----------
+// ---------- Marcas de tiempo: gana siempre la edición más reciente ----------
 
-export function exportSections(gone: Record<string, number>): Sections {
+// Cada producto de una lista o colección lleva la hora (ms) de su última edición hecha en ESTE móvil, aunque no hubiera
+// conexión en ese momento; los borrados quedan como «lápidas» con su hora (60 días). Al juntar dos móviles, de cada producto
+// manda la versión más nueva, y un borrado más nuevo que una edición gana (y al revés). Lo que solo existe en un sitio se
+// conserva. El «libro» (account:stamps) recuerda la huella de cada producto tal como se vio por última vez: si ahora es
+// distinta, alguien lo ha editado y se anota la hora de ahora.
+type SectionStamps = { h: Record<string, string>, ts: Record<string, number>, del: Record<string, number> };
+type Ledger = { meta?: { h: string, t: number }, sections: Record<string, SectionStamps> };
+
+function loadLedger(): Ledger {
+    const raw = readJson(STAMPS_KEY);
+    if (!isObject(raw)) return { sections: {} };
+    const sections: Record<string, SectionStamps> = {};
+    if (isObject(raw.sections)) {
+        for (const [key, value] of Object.entries(raw.sections)) {
+            if (isObject(value) && isObject(value.h) && isObject(value.ts) && isObject(value.del)) sections[key] = value as unknown as SectionStamps;
+        }
+    }
+    const meta = isObject(raw.meta) && typeof raw.meta.h === "string" && typeof raw.meta.t === "number" ? { h: raw.meta.h, t: raw.meta.t } : undefined;
+    return { meta, sections };
+}
+
+function saveLedger(ledger: Ledger) {
+    try {
+        localStorage.setItem(STAMPS_KEY, JSON.stringify(ledger));
+    } catch {
+        // sin sitio: las marcas se recalculan con la hora de ahora la próxima vez
+    }
+}
+
+// Lo que va en la «meta» de la cuenta (sin lo borrado ni la hora): si esto cambia, alguien ha tocado nombres, fijadas o ajustes
+function metaContent() {
     const registry = loadRegistry();
     const favRegistry = loadFavRegistry();
-    const out: Sections = {};
-    out.meta = {
+    return {
         lists: registry.lists,
         pinned: registry.pinned,
         flists: favRegistry.lists,
@@ -161,16 +191,157 @@ export function exportSections(gone: Record<string, number>): Sections {
         name: readRaw(NAME_KEY),
         zone: readRaw(ZONE_KEY),
         wh: readRaw(WAREHOUSE_KEY),
-        gone,
     };
+}
+
+const itemKey = (item: unknown): string | null => isObject(item) && typeof item.id === "number" ? String(item.id) : null;
+
+function stampSection(ledger: Ledger, key: string, items: unknown[], now: number): boolean {
+    const stamps = ledger.sections[key] ?? { h: {}, ts: {}, del: {} };
+    ledger.sections[key] = stamps;
+    let changed = false;
+    const seen = new Set<string>();
+    for (const item of items) {
+        const id = itemKey(item);
+        if (id === null) continue;
+        seen.add(id);
+        const hash = hashOf(item);
+        if (stamps.h[id] !== hash) {
+            stamps.h[id] = hash;
+            stamps.ts[id] = now;
+            delete stamps.del[id];
+            changed = true;
+        }
+    }
+    for (const id of Object.keys(stamps.h)) {
+        if (seen.has(id)) continue;
+        delete stamps.h[id];
+        delete stamps.ts[id];
+        stamps.del[id] = now;
+        changed = true;
+    }
+    for (const [id, when] of Object.entries(stamps.del)) {
+        if (now - when > GONE_DAYS * 86_400_000) {
+            delete stamps.del[id];
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+function stampMeta(ledger: Ledger, now: number): boolean {
+    const hash = hashOf(metaContent());
+    if (ledger.meta?.h === hash) return false;
+    ledger.meta = { h: hash, t: now };
+    return true;
+}
+
+const META_KEYS = new Set(["lists:v1", "favlists:v1", NAME_KEY, ZONE_KEY, WAREHOUSE_KEY]);
+
+// Anota las ediciones que se hayan hecho desde la última vez. Con una clave del almacenamiento, solo mira esa; sin clave, todo.
+export function reconcileStamps(storageKey?: string) {
+    const now = Date.now();
+    const ledger = loadLedger();
+    let changed = false;
+    if (storageKey !== undefined) {
+        const list = /^L:([a-f0-9]{16}):order$/.exec(storageKey);
+        const collection = /^F:([a-f0-9]{16}):items$/.exec(storageKey);
+        if (list) {
+            // En una lista compartida los productos viven en su propio servidor: aquí no se anotan
+            if (readJson(`L:${list[1]}:shared`)) return;
+            changed = stampSection(ledger, `L:${list[1]}`, asArray(readJson(storageKey)), now);
+        } else if (collection) {
+            changed = stampSection(ledger, `F:${collection[1]}`, asArray(readJson(storageKey)), now);
+        } else if (META_KEYS.has(storageKey)) {
+            changed = stampMeta(ledger, now);
+        } else return;
+    } else {
+        const registry = loadRegistry();
+        const favRegistry = loadFavRegistry();
+        const alive = new Set<string>();
+        for (const list of registry.lists) {
+            const key = keyOf("L", list.id);
+            alive.add(key);
+            if (loadListShared(list.id)) continue;
+            if (stampSection(ledger, key, loadListOrder(list.id), now)) changed = true;
+        }
+        for (const entry of favRegistry.lists) {
+            const key = keyOf("F", entry.id);
+            alive.add(key);
+            if (stampSection(ledger, key, loadFavItems(entry.id), now)) changed = true;
+        }
+        for (const key of Object.keys(ledger.sections)) {
+            if (!alive.has(key)) {
+                delete ledger.sections[key];
+                changed = true;
+            }
+        }
+        if (stampMeta(ledger, now)) changed = true;
+    }
+    if (changed) saveLedger(ledger);
+}
+
+// Mientras se escribe lo que llegó de otros móviles no se anotan «ediciones»: esas horas vienen ya de la otra parte
+let applying = false;
+if (typeof window !== "undefined") {
+    window.addEventListener("mercalista:data", event => {
+        if (applying || !loadAccount()) return;
+        const key = (event as CustomEvent<unknown>).detail;
+        if (typeof key === "string") reconcileStamps(key);
+    });
+}
+
+// Tras escribir las secciones juntadas, el libro pasa a recordar lo que hay en el almacenamiento con las horas juntadas
+function adoptStamps(sections: Sections) {
+    const old = loadLedger();
+    const ledger: Ledger = { sections: {} };
+    const take = (key: string, items: unknown[]) => {
+        const section = sections[key];
+        const before = old.sections[key];
+        const given = readStamped<{ id: number }>(section, "none");
+        const stamps: SectionStamps = { h: {}, ts: {}, del: section ? given.del : { ...(before?.del ?? {}) } };
+        for (const item of items) {
+            const id = itemKey(item);
+            if (id === null) continue;
+            stamps.h[id] = hashOf(item);
+            stamps.ts[id] = given.ts[id] ?? before?.ts[id] ?? 0;
+        }
+        ledger.sections[key] = stamps;
+    };
+    for (const list of loadRegistry().lists) take(keyOf("L", list.id), loadListShared(list.id) ? [] : loadListOrder(list.id));
+    for (const entry of loadFavRegistry().lists) take(keyOf("F", entry.id), loadFavItems(entry.id));
+    ledger.meta = { h: hashOf(metaContent()), t: Number(sections.meta?.mt) || old.meta?.t || 0 };
+    saveLedger(ledger);
+}
+
+// ---------- Datos locales <-> secciones ----------
+
+function stampedView(ledger: Ledger, key: string, field: string, items: unknown[]): Section {
+    const stamps = ledger.sections[key];
+    const ts: Record<string, number> = {};
+    for (const item of items) {
+        const id = itemKey(item);
+        if (id !== null) ts[id] = stamps?.ts[id] ?? 0;
+    }
+    return { [field]: items, ts, del: { ...(stamps?.del ?? {}) } };
+}
+
+export function exportSections(gone: Record<string, number>): Sections {
+    const registry = loadRegistry();
+    const favRegistry = loadFavRegistry();
+    const ledger = loadLedger();
+    const out: Sections = {};
+    out.meta = { ...metaContent(), gone, mt: ledger.meta?.t ?? 0 };
     const history = readJson(HISTORY_KEY);
     out.hist = isObject(history) ? history : {};
     for (const list of registry.lists) {
         const binding = loadListShared(list.id);
         // Una lista compartida vive en su propio servidor: aquí solo se apunta que lo es (para entrar en ella desde otro móvil)
-        out[`L:${list.id}`] = { shared: binding?.id ?? null, order: binding ? [] : loadListOrder(list.id) };
+        out[`L:${list.id}`] = binding
+            ? { shared: binding.id, order: [], ts: {}, del: {} }
+            : { shared: null, ...stampedView(ledger, keyOf("L", list.id), "order", loadListOrder(list.id)) };
     }
-    for (const collection of favRegistry.lists) out[`F:${collection.id}`] = { items: loadFavItems(collection.id) };
+    for (const collection of favRegistry.lists) out[`F:${collection.id}`] = stampedView(ledger, keyOf("F", collection.id), "items", loadFavItems(collection.id));
     return out;
 }
 
@@ -186,9 +357,69 @@ function unionById<T extends { id: string }>(first: T[], second: T[]): T[] {
     return [...first, ...second.filter(entry => !seen.has(entry.id))];
 }
 
-function mergeNumberedItems<T extends { id: number }>(local: T[], remote: T[]): T[] {
-    const seen = new Set(local.map(item => item.id));
-    return [...local, ...remote.filter(item => item && typeof item.id === "number" && !seen.has(item.id))];
+type Stamped<T> = { items: T[], ts: Record<string, number>, del: Record<string, number> };
+
+function readStamped<T extends { id: number }>(section: Section | undefined, field: string): Stamped<T> {
+    const numbers = (value: unknown): Record<string, number> => isObject(value)
+        ? Object.fromEntries(Object.entries(value).filter(([, time]) => typeof time === "number" && Number.isFinite(time))) as Record<string, number>
+        : {};
+    return {
+        items: asArray<T>(section?.[field]).filter(item => isObject(item) && typeof item.id === "number"),
+        ts: numbers(section?.ts),
+        del: numbers(section?.del),
+    };
+}
+
+// Junta dos copias de una lista producto a producto: de cada uno manda lo más reciente (edición o borrado). Lo que solo
+// está en una de las dos se conserva. El orden es el de aquí, y detrás lo que solo tenía el otro móvil.
+function mergeStamped<T extends { id: number }>(local: Stamped<T>, remote: Stamped<T>): Stamped<T> {
+    const localItems = new Map(local.items.map(item => [String(item.id), item]));
+    const remoteItems = new Map(remote.items.map(item => [String(item.id), item]));
+    const stateOf = (side: Stamped<T>, items: Map<string, T>, id: string): { live: boolean, t: number } | null =>
+        items.has(id) ? { live: true, t: side.ts[id] ?? 0 } : id in side.del ? { live: false, t: side.del[id] } : null;
+    const now = Date.now();
+    const ts: Record<string, number> = {};
+    const del: Record<string, number> = {};
+    const chosen = new Map<string, T>();
+    const ids = new Set([...localItems.keys(), ...remoteItems.keys(), ...Object.keys(local.del), ...Object.keys(remote.del)]);
+    for (const id of ids) {
+        const mine = stateOf(local, localItems, id);
+        const theirs = stateOf(remote, remoteItems, id);
+        let useMine: boolean;
+        if (!mine) useMine = false;
+        else if (!theirs) useMine = true;
+        else if (mine.t !== theirs.t) useMine = mine.t > theirs.t;
+        else useMine = mine.live || !theirs.live; // empate: nunca se pierde un producto por un borrado de la misma hora
+        const winner = (useMine ? mine : theirs) as { live: boolean, t: number };
+        if (winner.live) {
+            ts[id] = winner.t;
+            chosen.set(id, (useMine ? localItems : remoteItems).get(id) as T);
+        } else if (now - winner.t <= GONE_DAYS * 86_400_000) {
+            del[id] = winner.t;
+        }
+    }
+    const items: T[] = [];
+    const placed = new Set<string>();
+    for (const item of [...local.items, ...remote.items]) {
+        const id = String(item.id);
+        if (placed.has(id) || !chosen.has(id)) continue;
+        placed.add(id);
+        items.push(chosen.get(id) as T);
+    }
+    return { items, ts, del };
+}
+
+function mergeOrderSections(local: Section | undefined, remote: Section | undefined): Section {
+    const merged = mergeStamped<orderItem>(readStamped(local, "order"), readStamped(remote, "order"));
+    return { shared: local?.shared ?? remote?.shared ?? null, order: merged.items, ts: merged.ts, del: merged.del };
+}
+
+// Los favoritos de otra tienda apuntados a mano tienen un id al azar en cada móvil: si coinciden en nombre y tienda, quedan una vez
+function mergeFavoriteSections(local: Section | undefined, remote: Section | undefined): Section {
+    const merged = mergeStamped<listItem>(readStamped(local, "items"), readStamped(remote, "items"));
+    const items = mergeFavorites([], merged.items).items;
+    const kept = new Set(items.map(item => String(item.id)));
+    return { items, ts: Object.fromEntries(Object.entries(merged.ts).filter(([id]) => kept.has(id))), del: merged.del };
 }
 
 function mergeHistory(local: Section, remote: Section): Section {
@@ -202,15 +433,16 @@ function mergeHistory(local: Section, remote: Section): Section {
 
 const withoutGone = <T extends { id: string }>(entries: T[], prefix: "L" | "F", gone: Record<string, number>) => entries.filter(entry => !(keyOf(prefix, entry.id) in gone));
 
-// Une la «meta» de aquí con la del servidor. Sin cambios aquí gana la del servidor; con cambios en los dos sitios se
-// juntan las listas (los nombres de aquí mandan) y lo escalar de aquí manda si existe.
+// Une la «meta» de aquí con la del servidor. Sin cambios aquí gana la del servidor; con cambios en los dos sitios se juntan
+// las listas y, para nombres, fijadas y ajustes, manda la parte que se tocó más tarde.
 function mergeMeta(local: Section, remote: Section, dirty: boolean): Section {
     const gone: Record<string, number> = { ...(isObject(remote.gone) ? remote.gone as Record<string, number> : {}), ...(isObject(local.gone) ? local.gone as Record<string, number> : {}) };
-    const pick = (key: string): unknown => dirty ? (local[key] ?? remote[key] ?? null) : (remote[key] ?? local[key] ?? null);
-    const localLists = cleanLists(local.lists);
-    const localFavs = cleanCollections(local.flists);
-    const lists = withoutGone(dirty ? unionById(localLists, cleanLists(remote.lists)) : cleanLists(remote.lists), "L", gone);
-    const flists = withoutGone(dirty ? unionById(localFavs, cleanCollections(remote.flists)) : cleanCollections(remote.flists), "F", gone);
+    const mine = (Number(local.mt) || 0) >= (Number(remote.mt) || 0);
+    const first = dirty && mine ? local : remote;
+    const second = first === local ? remote : local;
+    const pick = (key: string): unknown => dirty ? (first[key] ?? second[key] ?? null) : (remote[key] ?? local[key] ?? null);
+    const lists = withoutGone(dirty ? unionById(cleanLists(first.lists), cleanLists(second.lists)) : cleanLists(remote.lists), "L", gone);
+    const flists = withoutGone(dirty ? unionById(cleanCollections(first.flists), cleanCollections(second.flists)) : cleanCollections(remote.flists), "F", gone);
     const pinned = pick("pinned");
     const fpinned = pick("fpinned");
     return {
@@ -222,6 +454,7 @@ function mergeMeta(local: Section, remote: Section, dirty: boolean): Section {
         zone: pick("zone"),
         wh: pick("wh"),
         gone,
+        mt: Math.max(Number(local.mt) || 0, Number(remote.mt) || 0),
     };
 }
 
@@ -229,10 +462,8 @@ function mergeSection(key: string, local: Section | undefined, remote: Section, 
     if (!local || !dirty) return remote;
     if (key === "meta") return mergeMeta(local, remote, true);
     if (key === "hist") return mergeHistory(local, remote);
-    if (key.startsWith("L:")) {
-        return { shared: local.shared ?? remote.shared ?? null, order: mergeNumberedItems(asArray<orderItem>(local.order), asArray<orderItem>(remote.order)) };
-    }
-    return { items: mergeFavorites(asArray<listItem>(local.items), asArray<listItem>(remote.items)).items };
+    if (key.startsWith("L:")) return mergeOrderSections(local, remote);
+    return mergeFavoriteSections(local, remote);
 }
 
 // Resultado de juntar lo de aquí con lo que han cambiado otros móviles
@@ -256,6 +487,16 @@ function mergeInto(local: Sections, remote: Remote, dirty: Set<string>): Section
 
 // Escribe las secciones en el almacenamiento del móvil (sustituyendo lo que había)
 function writeSections(sections: Sections) {
+    applying = true;
+    try {
+        writeSectionsNow(sections);
+        adoptStamps(sections);
+    } finally {
+        applying = false;
+    }
+}
+
+function writeSectionsNow(sections: Sections) {
     const meta = sections.meta;
     if (!meta) return;
     const lists = cleanLists(meta.lists);
@@ -329,7 +570,7 @@ function linkSections(local: Sections, remote: Remote): Sections {
         if (twin && !section.shared) {
             // La de siempre de este móvil se junta con la de siempre de la cuenta (si está vacía, no suma nada)
             const target = out[keyOf("L", twin.id)] ?? { shared: null, order: [] };
-            out[keyOf("L", twin.id)] = { ...target, order: mergeNumberedItems(asArray<orderItem>(target.order), items) };
+            out[keyOf("L", twin.id)] = mergeOrderSections(section, target);
         } else {
             lists.push(mine);
             out[keyOf("L", mine.id)] = section;
@@ -347,7 +588,7 @@ function linkSections(local: Sections, remote: Remote): Sections {
         const twin = remoteCollections.find(entry => entry.name === DEFAULT_FAV_NAME && mine.name === DEFAULT_FAV_NAME);
         if (twin) {
             const target = out[keyOf("F", twin.id)] ?? { items: [] };
-            out[keyOf("F", twin.id)] = { items: mergeFavorites(asArray<listItem>(target.items), asArray<listItem>(section.items)).items };
+            out[keyOf("F", twin.id)] = mergeFavoriteSections(section, target);
         } else {
             collections.push(mine);
             out[keyOf("F", mine.id)] = section;
@@ -363,6 +604,7 @@ function linkSections(local: Sections, remote: Remote): Sections {
         zone: remoteMeta.zone ?? localMeta.zone ?? null,
         wh: remoteMeta.wh ?? localMeta.wh ?? null,
         gone: isObject(remoteMeta.gone) ? remoteMeta.gone : {},
+        mt: Math.max(Number(localMeta.mt) || 0, Number(remoteMeta.mt) || 0),
     };
     return out;
 }
@@ -443,7 +685,7 @@ export function takeGoogleResult(): { credential: string } | { error: string } |
 
 // Borra los datos de la persona de este móvil (no la caché de Mercadona)
 export function wipeLocalData() {
-    const doomed: string[] = ["lists:v1", "favlists:v1", "order", "favorites", "shared-list:v1", NAME_KEY, ZONE_KEY, WAREHOUSE_KEY, HISTORY_KEY];
+    const doomed: string[] = ["lists:v1", "favlists:v1", "order", "favorites", "shared-list:v1", NAME_KEY, ZONE_KEY, WAREHOUSE_KEY, HISTORY_KEY, STAMPS_KEY];
     try {
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
@@ -547,6 +789,7 @@ export async function syncNow(mode: "apply" | "push"): Promise<boolean> {
                 return false;
             }
             setState("syncing");
+            reconcileStamps();
             let local = exportSections(account.gone);
 
             if (!account.linked) {
