@@ -26,8 +26,8 @@ type Props = {
     onClose: () => void,
 };
 
-const primary = "w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent text-on-accent text-base font-semibold hover:bg-accent-strong disabled:opacity-60";
 const outline = "w-full h-12 inline-flex items-center justify-center gap-2 rounded-md border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft disabled:opacity-60";
+const google = "w-full h-12 inline-flex items-center justify-center rounded-md border border-[#dadce0] bg-white text-[#3c4043] text-base font-medium hover:bg-[#f8f9fa] disabled:opacity-60";
 const quiet = "w-full h-12 rounded-md border border-border bg-surface text-base font-semibold hover:bg-surface-sunk disabled:opacity-60";
 
 const WhatIsSaved = () => (
@@ -49,8 +49,7 @@ const AccountPanel = ({ account, syncState, busy, waiting, error, onSignIn, onCa
                 {deleted && <p role="status" className="mb-3 rounded-md bg-surface-sunk p-3 text-base font-semibold">Tu cuenta y tus datos se han borrado de internet. Lo de este móvil se queda.</p>}
                 <p className="text-base">Entra con Google para tener tus listas y favoritos en todos tus móviles y no perderlos si cambias de teléfono.</p>
                 <WhatIsSaved />
-                <button type="button" onClick={onSignIn} disabled={busy || waiting} className={`mt-4 ${primary}`}>
-                    <UserRound size={20} aria-hidden="true" />
+                <button type="button" onClick={onSignIn} disabled={busy || waiting} className={`mt-4 ${google}`}>
                     {busy ? "Entrando…" : "Entrar con Google"}
                 </button>
                 {waiting && (
@@ -84,7 +83,7 @@ const AccountPanel = ({ account, syncState, busy, waiting, error, onSignIn, onCa
             </p>
             <div className="mt-3 space-y-2">
                 {signedOut
-                    ? <button type="button" onClick={onSignIn} disabled={busy} className={primary}><UserRound size={20} aria-hidden="true" />Volver a entrar con Google</button>
+                    ? <button type="button" onClick={onSignIn} disabled={busy} className={google}>Volver a entrar con Google</button>
                     : <button type="button" onClick={onSyncNow} disabled={busy || syncState === "syncing"} className={outline}><RefreshCw size={20} aria-hidden="true" />Sincronizar ahora</button>}
             </div>
             <WhatIsSaved />

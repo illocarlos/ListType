@@ -586,3 +586,11 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 - Causa de que las pruebas no lo vieran: el Google falso de las pruebas devolvía el token primero.
 - Arreglo: `takeGoogleResult` busca `id_token` / `error` por nombre en los parámetros, sin depender del orden. Las pruebas e2e36–38 usan ahora el orden real de Google (y con el código viejo fallan, comprobado).
 - Aviso: el token de Google no debe pegarse en chats ni tickets (caduca en 1 h, pero lleva el correo).
+
+## 2026-10-24 — Pantalla de zona tras entrar, sin «¿Vienes de la app anterior?» y botón de Google blanco
+- **Quitado «¿Vienes de la app anterior?»** de la dirección nueva (`MoveImport`, y `moveDismissed`/`dismissMove`/`isNewHost`, que quedaban sin uso). La mudanza sigue con el enlace «Llevar mis datos a la app nueva» de la dirección vieja (el código va tras la #). En el iPhone ya no se pega nada: el enlace deja los datos en Safari, y pasan a la app instalada al entrar con la misma cuenta de Google. Textos de la mudanza actualizados.
+- **Zona de precios con dos botones.** `ZoneCard`: «Usar mi ubicación» y «Escribir mi código postal»; el campo del código postal solo sale al pulsar el segundo (o al «Cambiar» una zona ya elegida) y toma el foco. Si falla la ubicación, se abre el campo con el aviso.
+- **Pantalla propia tras entrar** (`ZoneScreen`): solo con cuenta, sin zona y sin «Ahora no». Mientras la cuenta se sincroniza se enseña «Preparando tu cuenta…» (`ZoneLoading`), porque la sincronización puede traer la zona de otro móvil y entonces no se pregunta. «Ahora no, ver precios generales» se recuerda (`mercadona-zone:skipped`, que también se borra al salir borrando datos). Sin cuenta, sigue el recuadro de siempre dentro de la app.
+- **Botón de entrar con Google**: blanco, borde gris y texto oscuro (estilo neutro de Google), sin icono. El logo oficial de Google no se dibuja a mano: hay que usar el archivo oficial de la guía de marca de Google (pendiente de que lo aporte el dueño).
+- **Caducidad sin cambios** (decisión del dueño): sesión 60 días (se renueva al usar), datos 365 días (se renuevan al sincronizar). Pasado el primer plazo basta con volver a entrar con la misma cuenta de Google; pasado el segundo, los datos del servidor se pierden (los del móvil se conservan).
+- Pruebas: nuevas e2e39 (22 comprobaciones); e2e5 y e2e26 actualizadas.

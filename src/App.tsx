@@ -12,7 +12,7 @@ import type { SearchableProduct } from "./hooks/useMercadona"
 
 import type { listItem, orderItem } from "./types/types"
 import { formatCurrency } from "./helpers/formatPrice"
-import { mercadonaDetail, normalizeText, toListItem } from "./helpers/mercadona"
+import { mercadonaDetail, normalizeText, skipZone, toListItem, zoneSkipped } from "./helpers/mercadona"
 // componentes
 import OrderTotal from "./components/OrderTotal.tsx"
 import ButtonComponent from './components/ButtonComponent.tsx'
@@ -27,7 +27,7 @@ import ProductSheet from "./components/ProductSheet.tsx"
 import AppUpdate from "./components/AppUpdate.tsx"
 import Collapsible from "./components/Collapsible.tsx"
 import BackToTop from "./components/BackToTop.tsx"
-import { MoveBanner, MoveImport, MoveResult } from "./components/Move.tsx"
+import { MoveBanner, MoveResult } from "./components/Move.tsx"
 import AddStoreProduct from "./components/AddStoreProduct.tsx"
 import LoadingProducts from "./components/LoadingProducts.tsx"
 import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
@@ -35,13 +35,14 @@ import MyLists from "./components/MyLists.tsx"
 import MyFavorites from "./components/MyFavorites.tsx"
 import AccountPanel from "./components/AccountPanel.tsx"
 import { LoginGate, LoginReturned } from "./components/LoginGate.tsx"
+import { ZoneLoading, ZoneScreen } from "./components/ZoneScreen.tsx"
 import { ReceiveFavoritesPanel, ShareFavoritesPanel } from "./components/FavoritesShare.tsx"
 import { MAX_LISTS } from "./helpers/lists"
 import { MAX_COLLECTIONS } from "./helpers/favlists"
 import { createFavShare, takeFavoritesFromHash } from "./helpers/favshare"
 import { takeShareFromHash } from "./helpers/sync"
 import { flyToList } from "./helpers/flyToList"
-import { isNewHost, isOldHost } from "./helpers/move"
+import { isOldHost } from "./helpers/move"
 
 type Source = "todo" | "favoritos" | "mercadona"
 type HomeTab = "favoritos" | "novedades" | "rebajas" | "pasillos"
@@ -113,6 +114,8 @@ function App() {
   } = useFavorites();
   const mercadona = useMercadona();
   const accountApi = useAccount();
+  // «Ahora no» en la pantalla de zona que sale tras entrar con la cuenta
+  const [zoneSkip, setZoneSkip] = useState<boolean>(zoneSkipped);
   const [accountOpen, setAccountOpen] = useState<boolean>(false);
   const closeAccount = useCallback(() => setAccountOpen(false), []);
   // Si al volver de Google algo falla, se abre la hoja para que se vea el aviso
@@ -898,6 +901,13 @@ function App() {
     );
   }
 
+  // Recién entrado con la cuenta y sin zona de precios: pantalla propia con dos botones (ubicación o código postal).
+  // Mientras la cuenta se sincroniza no se pregunta: puede traer la zona de otro móvil (y entonces la pantalla no sale)
+  if (!isOldHost() && accountApi.account !== null && mercadona.zone === null && !zoneSkip) {
+    if (accountApi.syncState === "idle" || accountApi.syncState === "syncing") return <ZoneLoading />;
+    return <ZoneScreen zone={mercadona.zone} onChange={mercadona.changePostalCode} onSkip={() => { skipZone(); setZoneSkip(true); }} />;
+  }
+
   return (
     <div className="min-h-screen">
       {/* Cabecera con el buscador: lo primero y siempre a mano */}
@@ -1053,7 +1063,6 @@ function App() {
           ) : (
             <div>
               {/* Dirección nueva y sin datos: traer la lista y los favoritos de la app vieja */}
-              {isNewHost() && order.length === 0 && favorites.length === 0 && <MoveImport />}
               <ZoneCard zone={mercadona.zone} onChange={mercadona.changePostalCode} />
               {/* En la dirección vieja no se invita a instalar: la app está en la nueva */}
               {!isOldHost() && <InstallHint />}

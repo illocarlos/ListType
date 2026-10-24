@@ -1,11 +1,9 @@
-import { UserRound } from "lucide-react";
-
 // Pantallas a pantalla completa de la cuenta de Google:
 // - LoginGate: la entrada es obligatoria (la activa el dueño) y esta persona aún no ha entrado.
 // - LoginReturned: Google devolvió a ESTA ventana (en un iPhone, la ventana de Safari que abre la app instalada);
 //   la sesión la recoge la app desde la que se empezó, así que aquí solo se avisa.
 
-const primary = "w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-accent text-on-accent text-base font-semibold hover:bg-accent-strong disabled:opacity-60";
+const google = "w-full h-12 inline-flex items-center justify-center rounded-md border border-[#dadce0] bg-white text-[#3c4043] text-base font-medium hover:bg-[#f8f9fa] disabled:opacity-60";
 const quiet = "w-full h-12 rounded-md border border-border bg-surface text-base font-semibold hover:bg-surface-sunk disabled:opacity-60";
 
 type GateProps = {
@@ -30,8 +28,7 @@ export const LoginGate = ({ busy, waiting, error, hasInvite, onSignIn, onCancel 
                 <li>No se guarda tu correo ni tu nombre de Google, solo un identificador.</li>
                 <li>Si ya tenías cosas en este móvil, se conservan.</li>
             </ul>
-            <button type="button" onClick={onSignIn} disabled={busy || waiting} className={`mt-5 ${primary}`}>
-                <UserRound size={20} aria-hidden="true" />
+            <button type="button" onClick={onSignIn} disabled={busy || waiting} className={`mt-5 ${google}`}>
                 {busy ? "Entrando…" : "Entrar con Google"}
             </button>
             {waiting && (

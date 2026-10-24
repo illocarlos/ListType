@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { LocateFixed, MapPin } from "lucide-react";
+import { Keyboard, LocateFixed, MapPin } from "lucide-react";
 import { LocationError, postalCodeFromLocation } from "../helpers/mercadona";
 import type { Zone } from "../helpers/mercadona";
 
@@ -10,9 +10,12 @@ type ZoneCardProps = {
 
 type Busy = "" | "location" | "postal";
 
-// Zona de precios: el usuario toca "Usar mi ubicación" o escribe su código postal. Nada de códigos de almacén.
+// Zona de precios: el usuario toca "Usar mi ubicación" o "Escribir mi código postal" (solo entonces sale el campo).
+// Nada de códigos de almacén.
 const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
     const [editing, setEditing] = useState<boolean>(false);
+    // El campo del código postal solo sale al pulsar "Escribir mi código postal" (o al cambiar una zona ya elegida)
+    const [manual, setManual] = useState<boolean>(false);
     const [value, setValue] = useState<string>(zone?.postalCode ?? "");
     const [error, setError] = useState<string>("");
     const [busy, setBusy] = useState<Busy>("");
@@ -20,8 +23,14 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
     const inputId = useId();
     const helpId = useId();
     const errorId = useId();
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const open = !zone || editing;
+
+    // Al enseñar el campo, el foco va a él (sin saltos de pantalla)
+    useEffect(() => {
+        if (manual && open) inputRef.current?.focus({ preventScroll: true });
+    }, [manual, open]);
 
     // Al confirmar el código postal el formulario desaparece: el foco pasa a "Cambiar" (no se pierde)
     const changeRef = useRef<HTMLButtonElement>(null);
@@ -43,6 +52,7 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
         }
         focusChange.current = true;
         setEditing(false);
+        setManual(false);
         setDone(fromLocation
             ? `Listo: por tu ubicación, tu código postal es ${postalCode}. Ya ves los precios de tu zona.`
             : `Listo: ya ves los precios de tu zona (${postalCode}).`);
@@ -65,6 +75,7 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
             await applyPostalCode(postalCode, true);
         } catch (locationError) {
             setBusy("");
+            setManual(true);
             setError(locationError instanceof LocationError
                 ? locationError.message
                 : "No se ha podido usar tu ubicación. Escribe el código postal, por favor.");
@@ -85,7 +96,7 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
                     <button
                         ref={changeRef}
                         type="button"
-                        onClick={() => { setValue(zone.postalCode); setEditing(true); setDone(""); }}
+                        onClick={() => { setValue(zone.postalCode); setManual(true); setEditing(true); setDone(""); }}
                         className="flex-none h-11 px-3 text-sm font-semibold text-accent underline underline-offset-2"
                     >
                         Cambiar
@@ -115,41 +126,52 @@ const ZoneCard = ({ zone, onChange }: ZoneCardProps) => {
                         El móvil te pedirá permiso. Solo se usa para saber tu código postal; la app no la guarda.
                     </p>
 
-                    <form onSubmit={submit} className="mt-4 flex flex-col gap-3 border-t border-border pt-4" noValidate>
-                        <label htmlFor={inputId} className="text-base font-semibold">O escribe tu código postal</label>
-                        <input
-                            id={inputId}
-                            value={value}
-                            onChange={event => setValue(event.target.value.replace(/\D/g, "").slice(0, 5))}
-                            inputMode="numeric"
-                            autoComplete="postal-code"
-                            pattern="[0-9]*"
-                            placeholder="41300"
-                            aria-describedby={error ? `${helpId} ${errorId}` : helpId}
-                            aria-invalid={error ? true : undefined}
-                            className="h-14 rounded-md border-2 border-border-input bg-surface px-4 text-xl tabular tracking-wide focus:border-accent focus:outline-none"
-                        />
-                        {error && <p id={errorId} role="alert" className="text-base text-danger">{error}</p>}
-                        <div className="flex gap-3">
+                    {manual ? (
+                        <form onSubmit={submit} className="mt-4 flex flex-col gap-3 border-t border-border pt-4" noValidate>
+                            <label htmlFor={inputId} className="text-base font-semibold">O escribe tu código postal</label>
+                            <input
+                                ref={inputRef}
+                                id={inputId}
+                                value={value}
+                                onChange={event => setValue(event.target.value.replace(/\D/g, "").slice(0, 5))}
+                                inputMode="numeric"
+                                autoComplete="postal-code"
+                                pattern="[0-9]*"
+                                placeholder="41300"
+                                aria-describedby={error ? `${helpId} ${errorId}` : helpId}
+                                aria-invalid={error ? true : undefined}
+                                className="h-14 rounded-md border-2 border-border-input bg-surface px-4 text-xl tabular tracking-wide focus:border-accent focus:outline-none"
+                            />
                             <button
                                 type="submit"
                                 disabled={busy !== ""}
                                 aria-busy={busy === "postal"}
-                                className="flex-1 h-14 rounded-md border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft disabled:opacity-70"
+                                className="w-full h-14 rounded-md border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft disabled:opacity-70"
                             >
                                 {busy === "postal" ? "Buscando tu zona…" : "Ver precios de mi zona"}
                             </button>
-                            {zone && (
-                                <button
-                                    type="button"
-                                    onClick={() => { setEditing(false); setError(""); }}
-                                    className="h-14 px-4 rounded-md border-2 border-border bg-surface text-base font-semibold"
-                                >
-                                    Cancelar
-                                </button>
-                            )}
-                        </div>
-                    </form>
+                        </form>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => { setManual(true); setError(""); }}
+                            disabled={busy !== ""}
+                            className="mt-4 w-full h-14 inline-flex items-center justify-center gap-2 rounded-md border-2 border-accent bg-surface text-accent-strong text-base font-semibold hover:bg-accent-soft disabled:opacity-70"
+                        >
+                            <Keyboard size={22} aria-hidden="true" />
+                            Escribir mi código postal
+                        </button>
+                    )}
+                    {error && <p id={errorId} role="alert" className="mt-3 text-base text-danger">{error}</p>}
+                    {zone && (
+                        <button
+                            type="button"
+                            onClick={() => { setEditing(false); setManual(false); setError(""); }}
+                            className="mt-3 w-full h-14 rounded-md border-2 border-border bg-surface text-base font-semibold"
+                        >
+                            Cancelar
+                        </button>
+                    )}
 
                     <p className="mt-2 text-sm text-muted">
                         <a

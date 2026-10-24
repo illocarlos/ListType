@@ -730,7 +730,7 @@ export function takeGoogleResult(): { credential: string, state: string } | { er
 
 // Borra los datos de la persona de este móvil (no la caché de Mercadona)
 export function wipeLocalData() {
-    const doomed: string[] = ["lists:v1", "favlists:v1", "order", "favorites", "shared-list:v1", NAME_KEY, ZONE_KEY, WAREHOUSE_KEY, HISTORY_KEY, STAMPS_KEY];
+    const doomed: string[] = ["lists:v1", "favlists:v1", "order", "favorites", "shared-list:v1", NAME_KEY, ZONE_KEY, "mercadona-zone:skipped", WAREHOUSE_KEY, HISTORY_KEY, STAMPS_KEY];
     try {
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
