@@ -24,7 +24,9 @@ import { newSharedState } from "./sync";
 
 const ACCOUNT_KEY = "account:v1";
 const LAST_KEY = "account:last";
-const NONCE_KEY = "account:nonce";
+const LOGIN_KEY = "account:login";
+const RETURN_KEY = "account:return";
+const LOGIN_WAIT_MS = 10 * 60 * 1000;
 const NAME_KEY = "shared-name:v1";
 const ZONE_KEY = "mercadona-zone:v1";
 const WAREHOUSE_KEY = "mercadona:v1:wh";
@@ -636,18 +638,30 @@ async function call(body: unknown): Promise<Record<string, unknown>> {
     return record;
 }
 
-export async function fetchAccountConfig(): Promise<{ configured: boolean, clientId: string | null }> {
+export type AccountConfig = { configured: boolean, clientId: string | null, required: boolean, failed?: boolean };
+
+export async function fetchAccountConfig(): Promise<AccountConfig> {
     try {
         const response = await fetch("/api/cuenta", { cache: "no-store" });
         const data: unknown = await response.json();
-        if (isObject(data) && data.ok && data.configured === true && typeof data.clientId === "string") return { configured: true, clientId: data.clientId };
+        if (isObject(data) && data.ok === true) {
+            const configured = data.configured === true && typeof data.clientId === "string" && data.clientId.length > 0;
+            return { configured, clientId: configured ? data.clientId as string : null, required: configured && data.required === true };
+        }
     } catch {
-        // sin función o sin conexión: la cuenta no se ofrece
+        // sin conexión o sin la función (desarrollo): sin cuenta
+        return { configured: false, clientId: null, required: false, failed: true };
     }
-    return { configured: false, clientId: null };
+    return { configured: false, clientId: null, required: false };
 }
 
-// ---------- Entrar con Google (por redirección) ----------
+// ---------- Entrar con Google ----------
+//
+// En un iPhone con la app en la pantalla de inicio, Google se abre en una ventana de Safari que NO comparte el almacenamiento
+// de la app. Por eso la entrada va en dos pasos: la app guarda un secreto «S» que no sale de ella y manda a Google solo su
+// huella (state = sha256(S)); la página a la que Google devuelve (la app misma o la ventana de Safari) entrega el token al
+// servidor («finish»); y solo la app, que conoce S, recoge la sesión («claim»). Si Google devuelve a la propia app, se
+// recoge al instante; si no, la app lo va recogiendo en cuanto vuelve a verse.
 
 function randomHex(bytes: number): string {
     const data = new Uint8Array(bytes);
@@ -655,10 +669,38 @@ function randomHex(bytes: number): string {
     return Array.from(data, byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function startGoogleLogin(clientId: string) {
-    const nonce = randomHex(16);
+async function sha256Hex(text: string): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+// Enlace de invitación (#lista=… / #favoritos=…) con el que se abrió la app: se conserva si hay que entrar antes de usarla
+const BOOT_HASH = typeof location !== "undefined" ? location.hash : "";
+const isInviteHash = (hash: string) => /^#(lista|favoritos)=[A-Za-z0-9_-]{22}$/.test(hash);
+
+type PendingLogin = { secret: string, at: number };
+
+function readPending(): PendingLogin | null {
+    const raw = readJson(LOGIN_KEY);
+    if (!isObject(raw) || typeof raw.secret !== "string" || !/^[a-f0-9]{64}$/.test(raw.secret) || typeof raw.at !== "number") return null;
+    if (Date.now() - raw.at > LOGIN_WAIT_MS) {
+        removeKey(LOGIN_KEY);
+        return null;
+    }
+    return { secret: raw.secret, at: raw.at };
+}
+
+export const hasPendingLogin = (): boolean => readPending() !== null;
+export const cancelPendingLogin = () => removeKey(LOGIN_KEY);
+
+export async function startGoogleLogin(clientId: string, keepInvite = false) {
+    const secret = randomHex(32);
+    let state: string;
     try {
-        localStorage.setItem(NONCE_KEY, nonce);
+        state = await sha256Hex(secret);
+        localStorage.setItem(LOGIN_KEY, JSON.stringify({ secret, at: Date.now() }));
+        if (keepInvite && isInviteHash(BOOT_HASH)) localStorage.setItem(RETURN_KEY, BOOT_HASH);
+        else localStorage.removeItem(RETURN_KEY);
     } catch {
         throw new AccountError(0, "storage");
     }
@@ -667,19 +709,21 @@ export function startGoogleLogin(clientId: string) {
         redirect_uri: `${location.origin}/`,
         response_type: "id_token",
         scope: "openid email profile",
-        nonce,
+        nonce: state,
+        state,
         prompt: "select_account",
     });
     location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
 
 // Al volver de Google, el token viene en la dirección (#id_token=…): se lee y se quita enseguida
-export function takeGoogleResult(): { credential: string } | { error: string } | null {
+export function takeGoogleResult(): { credential: string, state: string } | { error: string } | null {
     if (!location.hash.startsWith("#id_token=") && !location.hash.startsWith("#error=")) return null;
     const params = new URLSearchParams(location.hash.slice(1));
     history.replaceState(null, "", location.pathname + location.search);
     const credential = params.get("id_token");
-    if (credential) return { credential };
+    const state = params.get("state");
+    if (credential && state && /^[a-f0-9]{64}$/.test(state)) return { credential, state };
     return { error: params.get("error") || "error" };
 }
 
@@ -697,13 +741,33 @@ export function wipeLocalData() {
     for (const key of doomed) removeKey(key);
 }
 
-// Completa la entrada: comprueba el token en el servidor y deja la cuenta guardada en este móvil.
-// Devuelve true si se han borrado datos de otra cuenta (la página hay que recargarla).
-export async function finishLogin(credential: string): Promise<boolean> {
-    const nonce = readRaw(NONCE_KEY);
-    removeKey(NONCE_KEY);
-    if (!nonce) throw new AccountError(401, "no_nonce");
-    const result = await call({ op: "login", credential, nonce });
+// Paso 2: entrega el token de Google al servidor. Devuelve:
+// - "here": este móvil ya tenía el secreto (Google devolvió a la propia app) y ha recogido la sesión.
+//   El valor va con true si se han borrado datos de otra cuenta (la página hay que recargarla).
+// - "elsewhere": la sesión la recogerá la app desde la que se empezó (este es otro navegador, p. ej. la ventana de Safari)
+export async function finishLogin(credential: string, state: string): Promise<{ where: "here", wiped: boolean } | { where: "elsewhere" }> {
+    await call({ op: "finish", credential, state });
+    const pending = readPending();
+    if (pending && await sha256Hex(pending.secret) === state) {
+        const outcome = await claimLogin();
+        if (outcome !== "waiting") return { where: "here", wiped: outcome === "wiped" };
+    }
+    return { where: "elsewhere" };
+}
+
+// Paso 3: recoge la sesión con el secreto. "waiting" = todavía no se ha terminado en Google (o ya caducó).
+export async function claimLogin(): Promise<"done" | "wiped" | "waiting"> {
+    const pending = readPending();
+    if (!pending) return "waiting";
+    let result: Record<string, unknown>;
+    try {
+        result = await call({ op: "claim", secret: pending.secret });
+    } catch (error) {
+        if (error instanceof AccountError && (error.status === 404 || error.status === 0)) return "waiting";
+        removeKey(LOGIN_KEY);
+        throw error;
+    }
+    removeKey(LOGIN_KEY);
     const uid = String(result.uid ?? "");
     if (!uid) throw new AccountError(502, "bad_response");
     // Si en este móvil estaban los datos de OTRA cuenta, no se mezclan con los de esta persona
@@ -718,7 +782,7 @@ export async function finishLogin(credential: string): Promise<boolean> {
     if (old && old.uid === uid) {
         // La misma cuenta que la última vez (la sesión había caducado): se sigue desde donde se quedó
         saveAccount({ ...old, email: typeof result.email === "string" ? result.email : old.email, name: typeof result.name === "string" ? result.name : old.name, signedOut: undefined });
-        return wiped;
+        return wiped ? "wiped" : "done";
     }
     saveAccount({
         uid,
@@ -726,7 +790,15 @@ export async function finishLogin(credential: string): Promise<boolean> {
         name: typeof result.name === "string" ? result.name : "",
         rev: 0, hashes: {}, gone: {}, pending: {}, linked: false,
     });
-    return wiped;
+    return wiped ? "wiped" : "done";
+}
+
+// Enlace de invitación guardado antes de entrar: se devuelve una sola vez
+export function takeReturnInvite(): string | null {
+    const value = readRaw(RETURN_KEY);
+    if (value === null) return null;
+    removeKey(RETURN_KEY);
+    return isInviteHash(value) ? value : null;
 }
 
 // ---------- Salir y borrar ----------

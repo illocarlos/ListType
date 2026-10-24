@@ -4,13 +4,20 @@
 // Qué se guarda de quien entra: solo un identificador (el «sub» de Google; NO el correo ni el nombre) y sus datos.
 // El correo y el nombre los lee el propio móvil en el momento de entrar, para enseñarlos, y no pasan a la base de datos.
 //
-// Entrar: el móvil va a Google por redirección y vuelve con un «id_token» firmado. Aquí se comprueba la firma con las
-// claves públicas de Google, que la audiencia es esta app (GOOGLE_CLIENT_ID, un dato público; no hay ninguna clave
-// secreta) y que el token es reciente y no se ha usado antes. Después se crea una sesión con un código al azar de 256
-// bits guardado en la base de datos y enviado en una cookie HttpOnly (el código de la página no puede leerla).
+// Entrar, en dos pasos (así funciona también en un iPhone con la app en la pantalla de inicio, donde Google se abre en
+// una ventana de Safari que NO comparte almacenamiento con la app):
+//   1) La app genera un secreto al azar «S» (256 bits) que no sale de ella, y manda a Google su huella «state» = sha256(S).
+//      Google devuelve un «id_token» firmado cuyo «nonce» es ese state, a la página que se abra al volver (la app o Safari).
+//   2) «finish» (desde esa página): se comprueba la firma con las claves públicas de Google, que la audiencia es esta app
+//      (GOOGLE_CLIENT_ID, un dato público; no hay ninguna clave secreta), que el token es reciente, no se ha usado antes
+//      y que su nonce es el state. Se deja un «recado» de 10 minutos con el identificador de la cuenta (y correo/nombre,
+//      que el móvil mostrará y que se borran al recogerlos) bajo ese state.
+//   3) «claim» (desde la app, con S): solo quien conoce S puede recoger el recado, una sola vez. Se crea la sesión: un
+//      código al azar de 256 bits guardado en la base de datos y enviado en una cookie HttpOnly.
 //
-// Todo va por POST con JSON, salvo GET (¿está configurado?):
-//   { op: "login", credential, nonce }                 -> inicia sesión (cookie)
+// Todo va por POST con JSON, salvo GET (¿está configurado? ¿es obligatorio entrar?):
+//   { op: "finish", credential, state }                -> comprueba el token de Google y deja el recado
+//   { op: "claim", secret }                            -> recoge el recado e inicia sesión (cookie)
 //   { op: "logout" }                                   -> cierra esta sesión
 //   { op: "sync", since, push: [{key, v}], del: [key] } -> sube lo cambiado y baja lo que han cambiado otros móviles
 //   { op: "delete" }                                   -> borra los datos y todas las sesiones de la cuenta
@@ -33,6 +40,9 @@ const SYNC_PER_MINUTE = 40;
 const LOGIN_PER_IP_HOUR = 30;
 const LOGIN_GLOBAL_DAY = 300;
 const NEW_ACCOUNTS_DAY = 200;
+const CLAIM_TTL = 600;
+const CLAIM_PER_IP_HOUR = 400;
+const CLAIM_GLOBAL_DAY = 6000;
 const COOKIE = 'ml_session';
 const TOKEN_MAX_AGE_MS = 15 * 60 * 1000;
 const KEY_RE = /^(meta|hist|L:[a-f0-9]{16}|F:[a-f0-9]{16})$/;
@@ -138,12 +148,36 @@ async function session(req) {
     return { sub, hash };
 }
 
-async function login(body, req, res) {
+const STATE_RE = /^[a-f0-9]{64}$/;
+const claimKey = state => `ac:c:${state}`;
+
+async function finish(body, req) {
     await limitCreate(req, 'ac', LOGIN_PER_IP_HOUR, LOGIN_GLOBAL_DAY);
-    const { sub, email, name } = await verifyGoogleToken(body.credential, body.nonce);
+    if (typeof body.state !== 'string' || !STATE_RE.test(body.state)) throw new HttpError(400, 'invalid_credential');
+    const { sub, email, name } = await verifyGoogleToken(body.credential, body.state);
     // Cada token vale una sola vez (si alguien lo copiara de una dirección, no serviría)
     const [fresh] = await redis([['SET', `ac:used:${sha(body.credential)}`, '1', 'NX', 'EX', '1200']], false);
     if (fresh === null || fresh === undefined) throw new HttpError(401, 'invalid_token');
+    await redis([['SET', claimKey(body.state), JSON.stringify({ sub, email, name }), 'EX', CLAIM_TTL]], false);
+    return { ok: true };
+}
+
+async function claim(body, req, res) {
+    if (typeof body.secret !== 'string' || !STATE_RE.test(body.secret)) throw new HttpError(400, 'invalid_claim');
+    await limitCreate(req, 'acl', CLAIM_PER_IP_HOUR, CLAIM_GLOBAL_DAY);
+    // GETDEL: el recado se recoge una sola vez
+    const [raw] = await redis([['GETDEL', claimKey(sha(body.secret))]], false);
+    if (typeof raw !== 'string') throw new HttpError(404, 'not_ready');
+    let data = null;
+    try {
+        data = JSON.parse(raw);
+    } catch {
+        data = null;
+    }
+    if (!data || typeof data.sub !== 'string' || !/^[0-9]{5,40}$/.test(data.sub)) throw new HttpError(404, 'not_ready');
+    const { sub } = data;
+    const email = typeof data.email === 'string' ? data.email : '';
+    const name = typeof data.name === 'string' ? data.name : '';
     const k = keys(sub);
     const [existing] = await redis([['EXISTS', k.rev]], false);
     if (!existing) {
@@ -297,7 +331,12 @@ function send(res, status, body) {
 
 export default async function handler(req, res) {
     const { url, token } = credentials();
-    if (req.method === 'GET') return send(res, 200, { ok: true, configured: Boolean(url && token && googleClientId()), clientId: googleClientId() || null });
+    if (req.method === 'GET') {
+        const configured = Boolean(url && token && googleClientId());
+        // LOGIN_REQUIRED=1 en Vercel: sin cuenta no se puede usar la app (interruptor del dueño; solo vale si Google está configurado)
+        const required = configured && ['1', 'true', 'si', 'sí'].includes((process.env.LOGIN_REQUIRED || '').trim().toLowerCase());
+        return send(res, 200, { ok: true, configured, clientId: googleClientId() || null, required });
+    }
     if (req.method !== 'POST') {
         res.setHeader('Allow', 'GET, POST');
         return send(res, 405, { error: 'method_not_allowed' });
@@ -314,8 +353,10 @@ export default async function handler(req, res) {
 
     try {
         switch (body.op) {
-            case 'login':
-                return send(res, 200, await login(body, req, res));
+            case 'finish':
+                return send(res, 200, await finish(body, req));
+            case 'claim':
+                return send(res, 200, await claim(body, req, res));
             case 'logout':
                 return send(res, 200, await logout(req, res));
             case 'sync':

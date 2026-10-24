@@ -16,8 +16,10 @@ type Props = {
     account: AccountState | null,
     syncState: SyncState,
     busy: boolean,
+    waiting: boolean,
     error: string,
     onSignIn: () => void,
+    onCancelLogin: () => void,
     onSyncNow: () => void,
     onLeave: (wipe: boolean) => void,
     onDeleteAll: () => Promise<boolean>,
@@ -37,7 +39,7 @@ const WhatIsSaved = () => (
     </ul>
 );
 
-const AccountPanel = ({ account, syncState, busy, error, onSignIn, onSyncNow, onLeave, onDeleteAll, onClose }: Props) => {
+const AccountPanel = ({ account, syncState, busy, waiting, error, onSignIn, onCancelLogin, onSyncNow, onLeave, onDeleteAll, onClose }: Props) => {
     const [confirm, setConfirm] = useState<"leave" | "delete" | null>(null);
     const [deleted, setDeleted] = useState<boolean>(false);
 
@@ -47,14 +49,21 @@ const AccountPanel = ({ account, syncState, busy, error, onSignIn, onSyncNow, on
                 {deleted && <p role="status" className="mb-3 rounded-md bg-surface-sunk p-3 text-base font-semibold">Tu cuenta y tus datos se han borrado de internet. Lo de este móvil se queda.</p>}
                 <p className="text-base">Entra con Google para tener tus listas y favoritos en todos tus móviles y no perderlos si cambias de teléfono.</p>
                 <WhatIsSaved />
-                <button type="button" onClick={onSignIn} disabled={busy} className={`mt-4 ${primary}`}>
+                <button type="button" onClick={onSignIn} disabled={busy || waiting} className={`mt-4 ${primary}`}>
                     <UserRound size={20} aria-hidden="true" />
                     {busy ? "Entrando…" : "Entrar con Google"}
                 </button>
+                {waiting && (
+                    <div role="status" className="mt-3 rounded-md bg-surface-sunk p-3 text-base">
+                        <p className="font-semibold">Esperando a que termines de entrar en Google…</p>
+                        <p className="mt-1 text-sm text-muted">Cuando acabes, vuelve a esta app: se completa sola en unos segundos.</p>
+                        <button type="button" onClick={onCancelLogin} className={`mt-3 ${quiet}`}>Cancelar</button>
+                    </div>
+                )}
                 {error && <p role="alert" className="mt-3 text-base font-semibold text-danger">{error}</p>}
                 <p className="mt-4 text-sm text-muted">
-                    En un iPhone con la app en la pantalla de inicio, Google puede abrirse en Safari y no devolverte a la app: si te pasa, entra una vez desde Safari
-                    y luego abre la app (los datos se bajan al abrirla).
+                    En un iPhone con la app en la pantalla de inicio, Google se abre en una ventana de Safari. Al terminar, vuelve a la app
+                    (cierra esa ventana con «OK» o cambia a MercaLista): recoge la entrada sola.
                 </p>
             </div>
         );

@@ -34,6 +34,7 @@ import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components
 import MyLists from "./components/MyLists.tsx"
 import MyFavorites from "./components/MyFavorites.tsx"
 import AccountPanel from "./components/AccountPanel.tsx"
+import { LoginGate, LoginReturned } from "./components/LoginGate.tsx"
 import { ReceiveFavoritesPanel, ShareFavoritesPanel } from "./components/FavoritesShare.tsx"
 import { MAX_LISTS } from "./helpers/lists"
 import { MAX_COLLECTIONS } from "./helpers/favlists"
@@ -882,6 +883,20 @@ function App() {
     </div>
   );
 
+  // Cuenta de Google: ventana a la que Google devolvió (la app la recoge desde donde empezó) o entrada obligatoria sin cuenta
+  if (accountApi.returned) return <LoginReturned />;
+  if (accountApi.gate) {
+    return (
+      <LoginGate
+        busy={accountApi.busy}
+        waiting={accountApi.waiting}
+        error={accountApi.error}
+        hasInvite={Boolean(invite || favInvite)}
+        onSignIn={() => accountApi.signIn(true)}
+        onCancel={accountApi.cancelLogin}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -1414,8 +1429,10 @@ function App() {
             account={accountApi.account}
             syncState={accountApi.syncState}
             busy={accountApi.busy}
+            waiting={accountApi.waiting}
             error={accountApi.error}
-            onSignIn={accountApi.signIn}
+            onSignIn={() => accountApi.signIn()}
+            onCancelLogin={accountApi.cancelLogin}
             onSyncNow={accountApi.syncNow}
             onLeave={accountApi.leave}
             onDeleteAll={accountApi.deleteAll}
