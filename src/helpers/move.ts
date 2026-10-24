@@ -3,10 +3,10 @@ import { saveImportant } from "./mercadona";
 // ---------- Mudanza a la dirección nueva (mercalista.vercel.app) ----------
 // La lista, los favoritos, la zona y el historial de precios se guardan en el navegador, y el navegador
 // los guarda por dirección: en una dirección nueva la app empezaría vacía. En la dirección vieja se
-// prepara un código con esos datos y en la nueva se mete:
-// - con el enlace "Llevar mis datos" (el código va tras la #, que no llega a ningún servidor), y
-// - pegándolo: en el iPhone la app de la pantalla de inicio no comparte datos con Safari (decisión de
-//   Apple), así que la app nueva instalada empieza vacía aunque el enlace se abriera en Safari.
+// prepara un código con esos datos y en la nueva se mete con el enlace "Llevar mis datos" (el código va
+// tras la #, que no llega a ningún servidor). En el iPhone la app de la pantalla de inicio no comparte
+// datos con Safari (decisión de Apple): el enlace los deja en Safari, y de ahí pasan a la app instalada
+// al entrar con la misma cuenta de Google (la cuenta sube lo de este móvil y lo baja en el otro).
 
 export const OLD_HOST = "anita-y-su-comprita.vercel.app";
 export const NEW_HOST = "mercalista.vercel.app";
@@ -19,7 +19,6 @@ const ZONE_KEY = "mercadona-zone:v1";
 const WAREHOUSE_KEY = "mercadona:v1:wh";
 const HISTORY_KEY = "price-history:v1";
 const RESULT_KEY = "move-result";
-const DISMISSED_KEY = "move-dismissed";
 
 // Comprimido (deflate) o tal cual si el navegador no sabe comprimir
 const PREFIX_DEFLATE = "ML1z.";
@@ -27,7 +26,6 @@ const PREFIX_PLAIN = "ML1j.";
 const MAX_CODE_LENGTH = 2_000_000;
 
 export const isOldHost = () => typeof location !== "undefined" && location.hostname === OLD_HOST;
-export const isNewHost = () => typeof location !== "undefined" && location.hostname === NEW_HOST;
 
 export class MoveError extends Error {}
 
@@ -218,14 +216,3 @@ export function takeMoveResult(): { products: number, favorites: number } | { er
     }
 }
 
-export function moveDismissed(): boolean {
-    try {
-        return localStorage.getItem(DISMISSED_KEY) === "1";
-    } catch {
-        return false;
-    }
-}
-
-export function dismissMove() {
-    saveImportant(DISMISSED_KEY, "1");
-}

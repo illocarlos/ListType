@@ -72,6 +72,21 @@ export function getZone(): Zone | null {
     return null;
 }
 
+// «Ahora no» en la pantalla de zona que sale tras entrar con la cuenta: no se le vuelve a poner esa pantalla
+const ZONE_SKIP_KEY = "mercadona-zone:skipped";
+
+export function zoneSkipped(): boolean {
+    try {
+        return localStorage.getItem(ZONE_SKIP_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+export function skipZone() {
+    saveImportant(ZONE_SKIP_KEY, "1");
+}
+
 function saveZone(zone: Zone) {
     // Si no cabe, se hace sitio borrando caché; si ni así, se usa durante esta sesión igualmente
     saveImportant(ZONE_KEY, JSON.stringify(zone));
