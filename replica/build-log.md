@@ -538,7 +538,7 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 
 **Móvil** (`account.ts`, `useAccount.ts`, `AccountPanel.tsx`)
 - Cada sección se compara por huella (JSON canónico + hash); solo se sube lo que cambió. Las listas compartidas viajan como «esta lista es la compartida X» (sin productos): el otro móvil entra en la misma.
-- Primera vez en un móvil: baja lo que hubiera y lo une con lo de aquí (se descartan «La compra» y «Mis favoritos» de fábrica sin tocar; si hay gemelas con nombre de fábrica se funden). Después, fusión por unión (gana lo local; nada se pierde). Lo borrado se anota (60 días) para borrarse también en los demás móviles.
+- Primera vez en un móvil: baja lo que hubiera y lo une con lo de aquí (se descartan «La compra» y «Mis favoritos» de fábrica sin tocar; si hay gemelas con nombre de fábrica se funden). Después, la fusión es **producto a producto y gana la edición más reciente** (ver más abajo). Las listas o colecciones borradas se anotan (60 días) para borrarse también en los demás móviles.
 - Cuándo sincroniza (sin sondeos, para no gastar Redis): al abrir, al volver a la app y al recuperar la conexión (sube y aplica); unos segundos después de cambiar algo (solo sube); si hay cosas de otro móvil y llevas 30 s sin tocar nada (aplica). Aplicar recarga la página.
 - Otra persona en el mismo móvil: sus datos **no se mezclan**; los de la anterior se borran de este móvil (siguen en su cuenta). Misma persona: sigue donde estaba. Salir: dejar los datos o borrarlos. Borrar la cuenta: se borra en el servidor y el móvil conserva sus datos.
 
@@ -546,6 +546,14 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 
 **Limitaciones, a la vista**
 - No hay sondeo: un cambio de otro móvil se ve al abrir/volver a la app o tras 30 s de inactividad.
-- Si dos móviles editan lo mismo sin conexión, se unen; un producto borrado en uno puede reaparecer si el otro lo tenía.
+- Con dos móviles sin conexión editando el mismo producto manda la hora de la edición, no quién se conecta antes. Las horas son las del reloj de cada móvil: si un móvil lo tiene mal puesto (horas o días de diferencia), sus ediciones ganarán o perderán por error.
+- Nombres de listas, fijadas y ajustes se juntan por la hora de la última vez que se tocó algo de eso en cada móvil (no por nombre individual).
 - Entrar con Google desde la app **instalada** en iPhone (modo independiente) depende de cómo iOS gestione la redirección: pendiente de probar en un iPhone real.
-- Pruebas: `e2e36` 42/42 (Google simulado con claves RSA propias), `apicuenta.mjs` 66/66, regresión completa.
+- Pruebas: `e2e36` 42/42 (Google simulado con claves RSA propias), `e2e37` 15/15 (última edición), `apicuenta.mjs` 66/66, regresión completa.
+
+**Gana la edición más reciente (añadido después)**
+- Cada producto de una lista o colección lleva la hora de su última edición hecha en ese móvil, **aunque no hubiera conexión** (se anota al guardar, no al sincronizar). Los borrados quedan como «lápidas» con su hora (60 días). Se guarda aparte, en `account:stamps`, con la huella de cada producto: si cambia, es una edición nueva.
+- Al juntar dos móviles, de cada producto manda la versión más nueva; un borrado más nuevo que una edición gana, y una edición más nueva que un borrado conserva el producto. Productos distintos tocados en cada móvil se conservan los dos. Empate exacto: nunca se pierde un producto.
+- Lo que llega de otro móvil se escribe sin anotarlo como edición propia (las horas vienen de quien lo editó).
+- Los favoritos apuntados a mano siguen sin duplicarse (mismo nombre y tienda = uno).
+- Servidor sin cambios: las horas viajan dentro de cada sección (`ts`, `del`; en la meta, `mt`).
