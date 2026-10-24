@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react"
+import { useEffect, useId, useLayoutEffect, useRef } from "react"
 import { Check, Info, Minus, Plus, Trash2 } from "lucide-react"
 import { formatCurrency } from "../helpers/formatPrice"
 import type { listItem, orderItem } from "../types/types"
@@ -34,6 +34,23 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
         if (target === null) return
         pendingCheck.current = null
         listRef.current?.querySelector<HTMLButtonElement>(`[data-row-id="${target}"] [role="checkbox"]`)?.focus()
+    }, [order])
+
+    // Producto recién añadido: su fila entra con un leve desplazamiento. Al abrir la lista no se anima nada (solo lo que aparece
+    // después), ni con «reducir movimiento». Antes de pintar, para que la fila no se vea entera un instante.
+    const known = useRef<Set<number> | null>(null)
+    useLayoutEffect(() => {
+        const ids = new Set(order.map(item => item.id))
+        const previous = known.current
+        known.current = ids
+        if (!previous || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+        for (const id of ids) {
+            if (previous.has(id)) continue
+            listRef.current?.querySelector<HTMLElement>(`[data-row-id="${id}"]`)?.animate?.(
+                [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }],
+                { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" },
+            )
+        }
     }, [order])
 
     const pending = order.filter(item => !item.done)

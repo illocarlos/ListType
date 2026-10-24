@@ -125,14 +125,14 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom", dismissible
 
     return (
         <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-text/40" onClick={dismissible ? onClose : undefined} aria-hidden="true" />
+            <div className="absolute inset-0 bg-text/40 anim-sheet-backdrop" onClick={dismissible ? onClose : undefined} aria-hidden="true" />
             <div
                 ref={panelRef}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className={`absolute ${panelShape} bg-surface shadow-pop flex flex-col overflow-hidden focus:outline-none`}
+                className={`absolute ${panelShape} bg-surface shadow-pop flex flex-col overflow-hidden focus:outline-none anim-sheet-panel`}
             >
                 <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
                     <h2 id={titleId} className="text-lg font-bold">{title}</h2>

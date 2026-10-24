@@ -165,7 +165,7 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
                                 onAdd(item);
                             }}
                             aria-label={`Añadir ${item.name} a la lista`}
-                            className={`h-11 w-11 grid place-items-center rounded-full text-on-accent transition-transform duration-150 hover:bg-accent-strong ${justAdded ? "bg-accent-strong motion-safe:scale-110" : "bg-accent"}`}
+                            className={`h-11 w-11 grid place-items-center rounded-full text-on-accent transition-transform duration-150 motion-safe:active:scale-95 hover:bg-accent-strong ${justAdded ? "bg-accent-strong motion-safe:scale-110" : "bg-accent"}`}
                         >
                             {justAdded ? <Check size={22} strokeWidth={3} aria-hidden="true" /> : <Plus size={22} aria-hidden="true" />}
                         </button>

@@ -25,7 +25,7 @@ type ZoneScreenProps = {
 
 export const ZoneScreen = ({ zone, onChange, onSkip }: ZoneScreenProps) => (
     <main className="min-h-screen grid place-items-center bg-bg px-4 py-10 safe-top safe-bottom">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm anim-fade-in">
             <h1 className="text-2xl font-bold">MercaLista</h1>
             <p className="mt-3 mb-4 text-base">Un último paso: elige tu zona para ver los precios de tu Mercadona.</p>
             <ZoneCard zone={zone} onChange={onChange} />
