@@ -20,10 +20,45 @@
   --color-on-highlight: 22 35 27;
   --color-danger: 180 35 24;
   --color-on-danger: 255 255 255;
+  --color-bar: 31 79 49;
+  --color-on-bar: 255 255 255;
+  --color-scrim: 22 35 27;
 
   --shadow-bar: 0 -6px 24px rgba(22, 35, 27, .10);
   --shadow-pop: 0 16px 40px rgba(22, 35, 27, .18);
   --ease: cubic-bezier(.2, .8, .2, 1);
+
+  /* Los controles del navegador (campos, barras de desplazamiento) siguen al modo del dispositivo */
+  color-scheme: light dark;
+}
+
+/* Modo noche: se activa solo cuando el dispositivo está en modo oscuro (en el iPhone, Ajustes > Pantalla y brillo >
+   Automático lo cambia con el horario). Mismos roles, otros valores (replica/design/tokens-dark.json). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: 15 22 18;
+    --color-surface: 24 34 28;
+    --color-surface-sunk: 36 49 41;
+    --color-border: 50 68 58;
+    --color-border-input: 126 148 132;
+    --color-text: 233 240 235;
+    --color-text-muted: 163 181 169;
+    --color-accent: 98 196 132;
+    --color-accent-strong: 134 216 163;
+    --color-on-accent: 10 26 16;
+    --color-accent-soft: 30 58 41;
+    --color-on-accent-soft: 195 236 210;
+    --color-highlight: 242 201 76;
+    --color-on-highlight: 22 35 27;
+    --color-danger: 255 143 133;
+    --color-on-danger: 42 8 6;
+    --color-bar: 22 38 28;
+    --color-on-bar: 233 240 235;
+    --color-scrim: 0 0 0;
+
+    --shadow-bar: 0 -6px 24px rgba(0, 0, 0, .45);
+    --shadow-pop: 0 16px 40px rgba(0, 0, 0, .6);
+  }
 }
 
 @layer base {

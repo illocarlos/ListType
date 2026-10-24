@@ -605,3 +605,10 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 - A petición del dueño («no veo diferencia»): entradas de 220 a 360 ms (antes 160–240) y más recorrido (secciones 16 px, hojas del móvil 64 px, fila nueva 20 px con un leve escalado). Siguen siendo solo `opacity`/`transform`, una vez y sin dejar nada activo.
 - Nuevo: el número de la cesta da un salto al cambiar (`usePop`, WAAPI, no al abrir la app ni con «reducir movimiento»).
 - Aviso para las pruebas: axe mide el contraste con la opacidad del instante; con animaciones más largas daba falsos «contraste insuficiente» a mitad de un fundido. `audit.py` y e2e14 esperan 700 ms antes de medir. Los textos terminan con el contraste normal.
+
+## 2026-10-24 — Modo noche automático
+- La app sigue sola al modo del dispositivo (`prefers-color-scheme`): de día, la paleta de siempre; de noche, una paleta oscura con los mismos roles (`replica/design/tokens-dark.json`, comprobada con contrast.py: 21 pares, 0 fallos AA). Cambia en vivo, sin recargar, cuando el dispositivo cambia de modo (en iPhone: Ajustes > Pantalla y brillo > Automático, con horario o de atardecer a amanecer; en Android y ordenador, igual con su ajuste).
+- Decisión: NO se programa una hora propia en la app (p. ej. «de 20:00 a 07:00»): chocaría con lo que el usuario ya eligió en su sistema y no sabe de la luz de su zona. El horario lo pone el dispositivo.
+- Cambios: variables de color oscuras en `index.css`; roles nuevos `bar`/`on-bar` (la cabecera ya no usa `accent-strong`, que de noche es un verde claro para textos) y `scrim` (el fondo tras las hojas era el color de texto: de noche se habría puesto claro); `color-scheme: light dark` (campos y barras del navegador); dos `theme-color` con `media` (barra del navegador). El botón blanco de Google no cambia.
+- Pruebas: e2e41 (13 comprobaciones, incluido el cambio en vivo y axe en noche); audit.py acepta `SCHEME=dark` (0 problemas de axe en las 8 pantallas).
+- Límite conocido: la pantalla de arranque de la app instalada (color de fondo del `manifest`) es una sola; de noche puede verse un instante clara antes de cargar.

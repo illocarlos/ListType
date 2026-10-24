@@ -913,7 +913,7 @@ function App() {
   return (
     <div className="min-h-screen">
       {/* Cabecera con el buscador: lo primero y siempre a mano */}
-      <header className="sticky top-0 z-30 bg-accent-strong text-on-accent safe-top">
+      <header className="sticky top-0 z-30 bg-bar text-on-bar safe-top">
         <div className="mx-auto max-w-content px-4">
           <div className="flex h-14 items-center justify-between">
             <h1 id="app-title" tabIndex={-1} className="text-xl font-extrabold tracking-tight focus:outline-none focus-visible:outline-highlight">Lista de la compra</h1>
@@ -921,7 +921,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => setAccountOpen(true)}
-                className="h-11 px-3 -mr-3 inline-flex items-center gap-1.5 rounded-pill text-base font-semibold hover:bg-accent"
+                className="h-11 px-3 -mr-3 inline-flex items-center gap-1.5 rounded-pill text-base font-semibold hover:bg-on-bar/10"
               >
                 <UserRound size={20} aria-hidden="true" />
                 <span>{accountApi.account ? "Mi cuenta" : "Entrar"}</span>

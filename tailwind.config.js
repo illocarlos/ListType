@@ -27,6 +27,9 @@ export default {
         'on-highlight': role('on-highlight'),
         danger: role('danger'),
         'on-danger': role('on-danger'),
+        bar: role('bar'),
+        'on-bar': role('on-bar'),
+        scrim: role('scrim'),
       },
       fontFamily: {
         sans: ['Onest', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],

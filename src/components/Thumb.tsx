@@ -155,7 +155,7 @@ const ZoomableThumb = ({ item, box }: { item: listItem, box: string }) => {
 
             {mode !== "closed" && createPortal(
                 <div
-                    className={`fixed inset-0 z-[60] grid place-items-center bg-text/80 p-4 ${mode === "hold" ? "pointer-events-none" : ""}`}
+                    className={`fixed inset-0 z-[60] grid place-items-center bg-scrim/80 p-4 ${mode === "hold" ? "pointer-events-none" : ""}`}
                     style={NO_SYSTEM_GESTURES}
                     onClick={mode === "keyboard" ? () => setMode("closed") : undefined}
                     role={mode === "keyboard" ? "dialog" : undefined}

@@ -125,7 +125,7 @@ const Sheet = ({ open, title, onClose, children, variant = "bottom", dismissible
 
     return (
         <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-text/40 anim-sheet-backdrop" onClick={dismissible ? onClose : undefined} aria-hidden="true" />
+            <div className="absolute inset-0 bg-scrim/40 dark:bg-scrim/70 anim-sheet-backdrop" onClick={dismissible ? onClose : undefined} aria-hidden="true" />
             <div
                 ref={panelRef}
                 role="dialog"

@@ -1,0 +1,180 @@
+{
+  "_about": "Paleta de modo noche (se activa sola cuando el dispositivo está en modo oscuro). Mismos roles que tokens.json. Comprobar con: python3 contrast.py replica/design/tokens-dark.json",
+  "color": {
+    "bg": "#0f1612",
+    "surface": "#18221c",
+    "surface-sunk": "#243129",
+    "border": "#32443a",
+    "border-input": "#7e9484",
+    "text": "#e9f0eb",
+    "text-muted": "#a3b5a9",
+    "accent": "#62c484",
+    "accent-strong": "#86d8a3",
+    "on-accent": "#0a1a10",
+    "accent-soft": "#1e3a29",
+    "on-accent-soft": "#c3ecd2",
+    "highlight": "#f2c94c",
+    "on-highlight": "#16231b",
+    "danger": "#ff8f85",
+    "on-danger": "#2a0806",
+    "success": "#62c484",
+    "bar": "#16261c",
+    "on-bar": "#e9f0eb"
+  },
+  "pairs": [
+    [
+      "text",
+      "bg"
+    ],
+    [
+      "text",
+      "surface"
+    ],
+    [
+      "text",
+      "surface-sunk"
+    ],
+    [
+      "text-muted",
+      "bg"
+    ],
+    [
+      "text-muted",
+      "surface"
+    ],
+    [
+      "text-muted",
+      "surface-sunk"
+    ],
+    [
+      "on-accent",
+      "accent"
+    ],
+    [
+      "on-accent",
+      "accent-strong"
+    ],
+    [
+      "on-accent-soft",
+      "accent-soft"
+    ],
+    [
+      "accent",
+      "surface"
+    ],
+    [
+      "accent",
+      "bg"
+    ],
+    [
+      "on-highlight",
+      "highlight"
+    ],
+    [
+      "danger",
+      "surface"
+    ],
+    [
+      "on-danger",
+      "danger"
+    ],
+    [
+      "border-input",
+      "surface",
+      "ui"
+    ],
+    [
+      "accent",
+      "surface",
+      "ui"
+    ],
+    [
+      "text-muted",
+      "accent-soft"
+    ],
+    [
+      "text",
+      "accent-soft"
+    ],
+    [
+      "accent-strong",
+      "accent-soft"
+    ],
+    [
+      "danger",
+      "accent-soft"
+    ],
+    [
+      "on-bar",
+      "bar"
+    ]
+  ],
+  "font": {
+    "sans": "Onest, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+  },
+  "type": {
+    "xs": {
+      "size": 12,
+      "line": 16,
+      "weight": 500
+    },
+    "sm": {
+      "size": 14,
+      "line": 20,
+      "weight": 400
+    },
+    "base": {
+      "size": 16,
+      "line": 24,
+      "weight": 400
+    },
+    "lg": {
+      "size": 18,
+      "line": 24,
+      "weight": 600
+    },
+    "xl": {
+      "size": 22,
+      "line": 28,
+      "weight": 700
+    },
+    "display": {
+      "size": 32,
+      "line": 36,
+      "weight": 800
+    }
+  },
+  "space": [
+    0,
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64
+  ],
+  "radius": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow": {
+    "bar": "0 -6px 24px rgba(22,35,27,.10)",
+    "pop": "0 16px 40px rgba(22,35,27,.18)"
+  },
+  "motion": {
+    "fast": "120ms",
+    "base": "200ms",
+    "ease": "cubic-bezier(.2,.8,.2,1)"
+  },
+  "layout": {
+    "content-max": 1120,
+    "list-panel": 380,
+    "row-min-height": 72,
+    "tap-target": 44,
+    "breakpoint-md": 768
+  }
+}
