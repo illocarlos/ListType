@@ -47,8 +47,8 @@ const ListOrder = ({ order, addItem, decreaseItem, removeItem, onOpenDetails, on
         for (const id of ids) {
             if (previous.has(id)) continue
             listRef.current?.querySelector<HTMLElement>(`[data-row-id="${id}"]`)?.animate?.(
-                [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }],
-                { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" },
+                [{ opacity: 0, transform: "translateY(20px) scale(.96)" }, { opacity: 1, transform: "none" }],
+                { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" },
             )
         }
     }, [order])
