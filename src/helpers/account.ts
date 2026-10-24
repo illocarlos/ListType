@@ -961,7 +961,12 @@ export async function syncNow(mode: "apply" | "push"): Promise<boolean> {
             if (account) saveAccount({ ...account, signedOut: true });
             setState("signedout");
         } else if (error instanceof AccountError && error.status === 0) setState("offline");
-        else setState("error");
+        else if (error instanceof AccountError && error.status === 409) {
+            // Otro móvil de la cuenta está escribiendo en este instante (el servidor atiende las escrituras de una en una):
+            // no es un fallo, se vuelve a intentar enseguida
+            setState("syncing");
+            window.setTimeout(() => void syncNow(mode), 1500);
+        } else setState("error");
         return false;
     } finally {
         running = false;
