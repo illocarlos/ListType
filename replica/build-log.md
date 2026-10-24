@@ -580,3 +580,9 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 - Sigue sin probarse en un iPhone real (la prueba simula la ventana de Safari con otro contexto de navegador y una navegación que no cambia la página).
 - Con la entrada obligatoria hace falta conexión la primera vez en cada móvil.
 - Pruebas: `e2e38` 24/24, `apicuenta.mjs` 80/80, `e2e36` 42/42, `e2e37` 15/15 y regresión completa.
+
+## 2026-10-24 — Arreglo: la entrada con Google no se completaba (orden de los parámetros)
+- Fallo real, visto en producción: Google devuelve «#state=…&iss=…&id_token=…&authuser=0&prompt=none» (state primero) y la app solo reconocía la dirección si empezaba por «#id_token=». Resultado: tras elegir cuenta la app seguía en «Esperando a que termines de entrar en Google…».
+- Causa de que las pruebas no lo vieran: el Google falso de las pruebas devolvía el token primero.
+- Arreglo: `takeGoogleResult` busca `id_token` / `error` por nombre en los parámetros, sin depender del orden. Las pruebas e2e36–38 usan ahora el orden real de Google (y con el código viejo fallan, comprobado).
+- Aviso: el token de Google no debe pegarse en chats ni tickets (caduca en 1 h, pero lleva el correo).

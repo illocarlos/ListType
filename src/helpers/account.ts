@@ -716,10 +716,11 @@ export async function startGoogleLogin(clientId: string, keepInvite = false) {
     location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
 
-// Al volver de Google, el token viene en la dirección (#id_token=…): se lee y se quita enseguida
+// Al volver de Google, el token viene en la dirección (…&id_token=…): se lee y se quita enseguida.
+// Google pone los parámetros en el orden que quiere (en la práctica «#state=…&iss=…&id_token=…»), así que se buscan por nombre
 export function takeGoogleResult(): { credential: string, state: string } | { error: string } | null {
-    if (!location.hash.startsWith("#id_token=") && !location.hash.startsWith("#error=")) return null;
     const params = new URLSearchParams(location.hash.slice(1));
+    if (!params.has("id_token") && !params.has("error")) return null;
     history.replaceState(null, "", location.pathname + location.search);
     const credential = params.get("id_token");
     const state = params.get("state");
