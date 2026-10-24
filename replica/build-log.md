@@ -524,3 +524,28 @@ Pedido por el dueño: compartir los favoritos de alguien «como las listas de la
 - Con varias colecciones y la lista de colecciones a la vista, el número de la pestaña es el de la abierta.
 - La copia no se puede retirar desde la app (caduca a los 90 días): quien tenga el enlace puede verla hasta entonces.
 - Pruebas: `e2e35` 47/47, `apifav.mjs` 32/32, regresión completa.
+
+## 2026-10-24 · Cuenta opcional con Google (los mismos datos en todos tus móviles)
+
+Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. Con cuenta, listas, favoritos (y sus colecciones) y ajustes viajan solos entre móviles.
+
+**Servidor** (`api/cuenta.js`; ops `login` / `logout` / `sync` / `delete` y un GET de configuración)
+- Google devuelve un `id_token` por redirección (`response_type=id_token`, con `nonce` guardado en el móvil). El servidor lo comprueba con las claves públicas de Google (RS256): emisor, `aud` = `GOOGLE_CLIENT_ID`, caducidad, `iat` ≤ 15 min, `email_verified` y nonce; cada token vale una sola vez.
+- Sesión: 256 bits al azar, en Redis solo su hash (`ac:s:{hash}`), cookie `HttpOnly` + `SameSite=Lax` + `Secure`, `Path=/api/cuenta`, 60 días renovables. **El servidor no guarda correo ni nombre**: el móvil los lee de la respuesta del login.
+- Datos: un hash por cuenta (`ac:{sub}:s`), una sección por clave (`meta`, `hist`, `L:{id}`, `F:{id}`) con su revisión. Topes: sección ≤ 200 KB, ≤ 60 claves por subida, cuerpo ≤ 800 KB. Caducan a los 365 días sin uso.
+- Límites: 30 logins por IP y hora, 300 al día, 200 cuentas nuevas al día, 40 sincronizaciones por minuto y cuenta. Borrar la cuenta elimina secciones, sesiones y contadores.
+- Si falta `GOOGLE_CLIENT_ID` (o Redis), `configured:false` y la app no enseña ningún botón de cuenta.
+
+**Móvil** (`account.ts`, `useAccount.ts`, `AccountPanel.tsx`)
+- Cada sección se compara por huella (JSON canónico + hash); solo se sube lo que cambió. Las listas compartidas viajan como «esta lista es la compartida X» (sin productos): el otro móvil entra en la misma.
+- Primera vez en un móvil: baja lo que hubiera y lo une con lo de aquí (se descartan «La compra» y «Mis favoritos» de fábrica sin tocar; si hay gemelas con nombre de fábrica se funden). Después, fusión por unión (gana lo local; nada se pierde). Lo borrado se anota (60 días) para borrarse también en los demás móviles.
+- Cuándo sincroniza (sin sondeos, para no gastar Redis): al abrir, al volver a la app y al recuperar la conexión (sube y aplica); unos segundos después de cambiar algo (solo sube); si hay cosas de otro móvil y llevas 30 s sin tocar nada (aplica). Aplicar recarga la página.
+- Otra persona en el mismo móvil: sus datos **no se mezclan**; los de la anterior se borran de este móvil (siguen en su cuenta). Misma persona: sigue donde estaba. Salir: dejar los datos o borrarlos. Borrar la cuenta: se borra en el servidor y el móvil conserva sus datos.
+
+**Para activarla** (lo hace el dueño): crear un cliente OAuth «Aplicación web» en Google Cloud (pantalla de consentimiento «En producción», ámbitos `openid email profile`, URI de redirección `https://mercalista.vercel.app/`) y poner su ID (público, no es secreto) en la variable `GOOGLE_CLIENT_ID` de Vercel.
+
+**Limitaciones, a la vista**
+- No hay sondeo: un cambio de otro móvil se ve al abrir/volver a la app o tras 30 s de inactividad.
+- Si dos móviles editan lo mismo sin conexión, se unen; un producto borrado en uno puede reaparecer si el otro lo tenía.
+- Entrar con Google desde la app **instalada** en iPhone (modo independiente) depende de cómo iOS gestione la redirección: pendiente de probar en un iPhone real.
+- Pruebas: `e2e36` 42/42 (Google simulado con claves RSA propias), `apicuenta.mjs` 66/66, regresión completa.

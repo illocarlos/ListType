@@ -1,9 +1,10 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Pin, Plus, RefreshCw, Search, Share2, ShoppingBasket, Sparkles, Trash2, Undo2, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Pin, Plus, RefreshCw, Search, Share2, ShoppingBasket, Sparkles, Trash2, Undo2, UserRound, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList, { cleanName } from "./hooks/useList"
 import useFavorites from "./hooks/useFavorites"
+import useAccount from "./hooks/useAccount"
 import useMercadona from "./hooks/useMercadona"
 import usePriceHistory from "./hooks/usePriceHistory"
 import useMediaQuery from "./hooks/useMediaQuery"
@@ -32,6 +33,7 @@ import LoadingProducts from "./components/LoadingProducts.tsx"
 import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components/SharedList.tsx"
 import MyLists from "./components/MyLists.tsx"
 import MyFavorites from "./components/MyFavorites.tsx"
+import AccountPanel from "./components/AccountPanel.tsx"
 import { ReceiveFavoritesPanel, ShareFavoritesPanel } from "./components/FavoritesShare.tsx"
 import { MAX_LISTS } from "./helpers/lists"
 import { MAX_COLLECTIONS } from "./helpers/favlists"
@@ -109,6 +111,13 @@ function App() {
     openCollection, newCollection, pinCollection, renameCollection, deleteCollection, mergeIntoCurrent, summaries: favSummaries,
   } = useFavorites();
   const mercadona = useMercadona();
+  const accountApi = useAccount();
+  const [accountOpen, setAccountOpen] = useState<boolean>(false);
+  const closeAccount = useCallback(() => setAccountOpen(false), []);
+  // Si al volver de Google algo falla, se abre la hoja para que se vea el aviso
+  useEffect(() => {
+    if (accountApi.error) setAccountOpen(true);
+  }, [accountApi.error]);
 
   const [query, setQuery] = useState<string>("");
   const deferredQuery = useDeferredValue(query);
@@ -881,6 +890,17 @@ function App() {
         <div className="mx-auto max-w-content px-4">
           <div className="flex h-14 items-center justify-between">
             <h1 id="app-title" tabIndex={-1} className="text-xl font-extrabold tracking-tight focus:outline-none focus-visible:outline-highlight">Lista de la compra</h1>
+            {accountApi.available && (
+              <button
+                type="button"
+                onClick={() => setAccountOpen(true)}
+                className="h-11 px-3 -mr-3 inline-flex items-center gap-1.5 rounded-pill text-base font-semibold hover:bg-accent"
+              >
+                <UserRound size={20} aria-hidden="true" />
+                <span>{accountApi.account ? "Mi cuenta" : "Entrar"}</span>
+                {accountApi.account && accountApi.syncState === "signedout" && <span className="sr-only"> (sesión caducada)</span>}
+              </button>
+            )}
           </div>
           <div className="pb-3 md:pr-[412px]">
             <label htmlFor="search" className="sr-only">Buscar productos de Mercadona</label>
@@ -1385,6 +1405,23 @@ function App() {
           onLeave={leaveList}
           onJoinCode={joinFromPaste}
         />
+      </Sheet>
+
+      {/* Cuenta opcional con Google */}
+      <Sheet open={accountOpen} title="Tu cuenta" onClose={closeAccount}>
+        {accountOpen && (
+          <AccountPanel
+            account={accountApi.account}
+            syncState={accountApi.syncState}
+            busy={accountApi.busy}
+            error={accountApi.error}
+            onSignIn={accountApi.signIn}
+            onSyncNow={accountApi.syncNow}
+            onLeave={accountApi.leave}
+            onDeleteAll={accountApi.deleteAll}
+            onClose={closeAccount}
+          />
+        )}
       </Sheet>
 
       {/* Compartir mis favoritos: copia puntual con enlace */}

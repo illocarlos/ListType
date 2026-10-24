@@ -324,6 +324,8 @@ export function saveImportant(key: string, value: string): boolean {
     for (;;) {
         try {
             localStorage.setItem(key, value);
+            // Aviso para quien quiera enterarse de que un dato del usuario ha cambiado (la sincronización de la cuenta)
+            window.dispatchEvent(new CustomEvent("mercalista:data", { detail: key }));
             return true;
         } catch {
             if (!evictOldest(key)) return false;
