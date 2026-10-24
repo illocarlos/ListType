@@ -1,5 +1,5 @@
 // Service worker de la app instalable: permite abrirla sin cobertura (por ejemplo, dentro del súper).
-// - Página: primero la red (así siempre se ve la última versión) y, sin conexión, la última guardada.
+// - Página: primero la red (así siempre se ve la última versión) y, sin conexión o si tarda más de 3 s, la última guardada.
 //   Solo se guarda como copia una página buena de verdad (200, HTML, de este sitio): una página de error
 //   guardada haría que, sin conexión, la app enseñara el error en vez de abrirse.
 // - Al instalarse y cada vez que llega una versión nueva de la página, se guardan también sus archivos
@@ -9,6 +9,8 @@
 // - /api/ y todo lo de otros dominios (Mercadona) no pasa por aquí: lo gestiona la app.
 
 const CACHE = 'lista-compra-v2';
+// Cuánto se espera a la red al abrir la app antes de usar la copia guardada
+const NAV_TIMEOUT_MS = 3000;
 const SHELL = ['/manifest.webmanifest', '/favicon.svg', '/apple-touch-icon.png', '/icon-192.png'];
 
 const isGoodPage = response =>
@@ -95,14 +97,21 @@ self.addEventListener('fetch', event => {
     if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
     if (request.mode === 'navigate') {
-        event.respondWith(
-            fetch(request)
-                .then(response => {
-                    if (isGoodPage(response)) event.waitUntil(storeVersion(response.clone()));
-                    return response;
-                })
-                .catch(async () => (await caches.match('/')) || Response.error())
-        );
+        // Con mala cobertura (la conexión no se corta, solo va muy lenta) la red puede tardar medio minuto: si en
+        // NAV_TIMEOUT_MS no ha llegado la página y hay copia guardada, se abre la copia. La red sigue su camino en
+        // segundo plano y, si llega bien, deja guardada la versión nueva para la próxima vez.
+        const network = fetch(request);
+        event.waitUntil(network
+            .then(response => (isGoodPage(response) ? storeVersion(response.clone()) : undefined))
+            .catch(() => undefined));
+        event.respondWith((async () => {
+            const slow = new Promise((_, reject) => setTimeout(reject, NAV_TIMEOUT_MS));
+            try {
+                return await Promise.race([network, slow]);
+            } catch {
+                return (await caches.match('/')) || network;
+            }
+        })());
         return;
     }
 

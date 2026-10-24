@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Datos privados: nunca al repositorio (es público)
+.env
+.env.*
+!.env.example
+.vercel

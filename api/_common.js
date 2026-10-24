@@ -88,19 +88,27 @@ export function clientIp(req) {
     return (parts[parts.length - 1] || 'desconocida').slice(0, 60);
 }
 
-// Tope de creaciones por IP y por hora, y un tope global al día como cortafuegos del gasto.
-// prefix separa los contadores de cada función (ml = listas, mf = favoritos).
-// Cuesta 2 operaciones de Redis, solo al crear (algo que se hace muy de vez en cuando).
+// Contadores de topes. Un solo viaje a la base de datos (INCR + EXPIRE juntos): así un contador nunca se queda sin caducidad.
+// prefix separa los contadores de cada función (ml = listas, mf = favoritos, ac = entrar, acl = recoger sesión, mu* = proxy).
+async function bump(key, seconds) {
+    const [count] = await redis([['INCR', key], ['EXPIRE', key, seconds]], false);
+    return Number(count);
+}
+
+// Tope por IP y por hora
+export async function limitIp(req, prefix, perIpHour) {
+    if (await bump(`${prefix}:rl:ip:${clientIp(req)}:${Math.floor(Date.now() / 3_600_000)}`, 3600) > perIpHour) throw new HttpError(429, 'rate_limited');
+}
+
+// Tope global al día: el cortafuegos del gasto aunque alguien use muchas IPs
+export async function limitGlobal(prefix, perDay) {
+    if (await bump(`${prefix}:rl:all:${Math.floor(Date.now() / 86_400_000)}`, 86400) > perDay) throw new HttpError(429, 'rate_limited');
+}
+
+// Tope de creaciones por IP y por hora, y un tope global al día. Se cuenta cada llamada (para cosas que se hacen muy de vez en cuando).
 export async function limitCreate(req, prefix, perIpHour, perDay) {
-    const now = Date.now();
-    const ipKey = `${prefix}:rl:ip:${clientIp(req)}:${Math.floor(now / 3_600_000)}`;
-    const allKey = `${prefix}:rl:all:${Math.floor(now / 86_400_000)}`;
-    const [ipCount, allCount] = await redis([['INCR', ipKey], ['INCR', allKey]], false);
-    const expires = [];
-    if (Number(ipCount) === 1) expires.push(['EXPIRE', ipKey, 3600]);
-    if (Number(allCount) === 1) expires.push(['EXPIRE', allKey, 86400]);
-    if (expires.length) await redis(expires, false).catch(() => undefined);
-    if (Number(ipCount) > perIpHour || Number(allCount) > perDay) throw new HttpError(429, 'rate_limited');
+    await limitIp(req, prefix, perIpHour);
+    await limitGlobal(prefix, perDay);
 }
 
 // Rechaza las peticiones de navegador que llegan desde OTRA web (una página ajena que intente usar el

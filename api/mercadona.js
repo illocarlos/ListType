@@ -14,6 +14,7 @@
 // El catálogo exige almacén (wh). Cualquier parámetro que no sea de la ruta se rechaza con 400.
 
 import { FRESH_MS, giveTurn, isConfigured, keyFor, readCopy, sleep, takeTurn, writeCopy } from './_catalogcache.js';
+import { limitGlobal, limitIp } from './_common.js';
 
 const UPSTREAM = 'https://tienda.mercadona.es/api/';
 // Solo lectura del catálogo público de la tienda: categorías, rebajas, novedades, ficha y parecidos.
@@ -37,10 +38,36 @@ const ALLOWED_PARAMS = {
     catalog: ['path', 'lang', 'wh'],
 };
 
+// Topes de lo que esta función provoca HACIA FUERA (Mercadona y OpenStreetMap). Sin ellos, quien inventase almacenes,
+// códigos postales o coordenadas distintas (cada combinación es otra URL: el CDN no ayuda) haría que cada petición
+// llegara a Mercadona/OSM con la identidad de esta app, y podrían bloquear a todos. Solo se cuentan las peticiones que
+// de verdad salen (las que se sirven del CDN o de la copia de la base de datos no gastan nada).
+// [prefijo del contador, por IP y hora, global al día]. Una IP que descarga el catálogo entero de un almacén que nadie
+// había abierto ese día hace unas 160-200 llamadas: el tope por IP queda por encima.
+const UPSTREAM_LIMITS = { catalog: ['muc', 400, 8000], zone: ['muz', 40, 3000], geo: ['mug', 30, 2000] };
+
+// true = se puede salir; false = ya se ha contestado 429. Sin base de datos, o si falla, se deja pasar (como antes).
+async function allowUpstream(req, res, kind) {
+    if (!isConfigured()) return true;
+    const [prefix, perIp, perDay] = UPSTREAM_LIMITS[kind];
+    try {
+        await limitIp(req, prefix, perIp);
+        await limitGlobal(prefix, perDay);
+        return true;
+    } catch (error) {
+        if (error?.status !== 429) return true;
+        console.warn(`[PROXY_TOPE] ruta=${kind}`);
+        res.setHeader('Retry-After', '600');
+        sendError(res, 429, 'rate_limited');
+        return false;
+    }
+}
+
 // Código postal -> almacén. La tienda de Mercadona hace lo mismo: envía el código postal
 // y la respuesta trae el almacén en la cabecera x-customer-wh. No se guarda nada del usuario.
-async function resolveZone(res, pc) {
+async function resolveZone(req, res, pc) {
     if (!PC_RE.test(pc)) return sendError(res, 400, 'invalid_postal_code');
+    if (!(await allowUpstream(req, res, 'zone'))) return;
     try {
         const upstream = await fetch(new URL('postal-codes/actions/change-pc/', UPSTREAM), {
             method: 'PUT',
@@ -92,7 +119,7 @@ function buildUrl(path, wh) {
 const NOMINATIM = 'https://nominatim.openstreetmap.org/reverse';
 const APP_ID = 'ListType/1.0 (+https://mercalista.vercel.app)';
 
-async function resolvePostcodeFromLocation(res, latRaw, lonRaw) {
+async function resolvePostcodeFromLocation(req, res, latRaw, lonRaw) {
     const lat = Number.parseFloat(String(latRaw ?? ''));
     const lon = Number.parseFloat(String(lonRaw ?? ''));
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
@@ -101,6 +128,7 @@ async function resolvePostcodeFromLocation(res, latRaw, lonRaw) {
     // España peninsular, Baleares, Canarias, Ceuta y Melilla (caja amplia)
     const inSpain = lat >= 27.4 && lat <= 44.0 && lon >= -18.4 && lon <= 4.5;
     if (!inSpain) return sendError(res, 404, 'outside_spain', {}, 86400);
+    if (!(await allowUpstream(req, res, 'geo'))) return;
 
     const url = new URL(NOMINATIM);
     url.searchParams.set('format', 'jsonv2');
@@ -246,11 +274,11 @@ export default async function handler(req, res) {
         const lat = single(req.query.lat);
         const lon = single(req.query.lon);
         if (!lat || !lon || !COORD_RE.test(lat) || !COORD_RE.test(lon)) return sendError(res, 400, 'invalid_location');
-        return resolvePostcodeFromLocation(res, lat, lon);
+        return resolvePostcodeFromLocation(req, res, lat, lon);
     }
 
     if (route === 'zone') {
-        return resolveZone(res, single(req.query.pc) ?? '');
+        return resolveZone(req, res, single(req.query.pc) ?? '');
     }
 
     if (!PATH_RE.test(path)) {
@@ -295,6 +323,11 @@ export default async function handler(req, res) {
             }
         }
 
+        // Tope de salidas hacia Mercadona. Con una copia vieja se sigue sirviendo esa.
+        if (!(await allowUpstream(req, res, 'catalog'))) {
+            if (copy) return sendOldCopy(res, copy, path, 'tope de peticiones');
+            return;
+        }
         const upstream = await fetchUpstream(buildUrl(path, wh));
 
         if (!upstream.ok) {

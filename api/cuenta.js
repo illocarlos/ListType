@@ -28,7 +28,7 @@
 // servidor (conflicto) para que las fusione y la vuelva a subir: nunca se pisa en silencio lo de otro móvil.
 import { createHash, createPublicKey, randomBytes, verify } from 'node:crypto';
 import { credentials } from './_redis.js';
-import { HttpError, fromAnotherSite, limitCreate, redis } from './_common.js';
+import { HttpError, fromAnotherSite, limitGlobal, limitIp, redis } from './_common.js';
 
 const SESSION_TTL = 60 * 24 * 60 * 60;
 const DATA_TTL = 365 * 24 * 60 * 60;
@@ -41,6 +41,9 @@ const LOGIN_PER_IP_HOUR = 30;
 const LOGIN_GLOBAL_DAY = 300;
 const NEW_ACCOUNTS_DAY = 200;
 const CLAIM_TTL = 600;
+// Escrituras de una misma cuenta: de una en una (ver withLock). Si otra tarda más de LOCK_WAIT_MS se contesta 409 y el móvil reintenta.
+const LOCK_SECONDS = 8;
+const LOCK_WAIT_MS = 4000;
 const CLAIM_PER_IP_HOUR = 400;
 const CLAIM_GLOBAL_DAY = 6000;
 const COOKIE = 'ml_session';
@@ -139,11 +142,12 @@ function readToken(req) {
 }
 
 // Devuelve { sub, hash } si hay una sesión válida; la renueva (60 días desde el último uso)
-async function session(req) {
+// renew=false: no se renueva aquí (sync lo hace como mucho una vez al día, junto con los datos)
+async function session(req, renew = true) {
     const token = readToken(req);
     if (!token) throw new HttpError(401, 'no_session');
     const hash = sha(token);
-    const [sub] = await redis([['GET', sessionKey(hash)], ['EXPIRE', sessionKey(hash), SESSION_TTL]], false);
+    const [sub] = await redis(renew ? [['GET', sessionKey(hash)], ['EXPIRE', sessionKey(hash), SESSION_TTL]] : [['GET', sessionKey(hash)]], false);
     if (typeof sub !== 'string' || !/^[0-9]{5,40}$/.test(sub)) throw new HttpError(401, 'no_session');
     return { sub, hash };
 }
@@ -152,9 +156,12 @@ const STATE_RE = /^[a-f0-9]{64}$/;
 const claimKey = state => `ac:c:${state}`;
 
 async function finish(body, req) {
-    await limitCreate(req, 'ac', LOGIN_PER_IP_HOUR, LOGIN_GLOBAL_DAY);
     if (typeof body.state !== 'string' || !STATE_RE.test(body.state)) throw new HttpError(400, 'invalid_credential');
+    // Primero se comprueba la firma de Google (no toca la base de datos) y solo después se cuentan los topes:
+    // así las peticiones basura no gastan comandos ni pueden agotar el tope global y dejar a todos sin entrar.
     const { sub, email, name } = await verifyGoogleToken(body.credential, body.state);
+    await limitIp(req, 'ac', LOGIN_PER_IP_HOUR);
+    await limitGlobal('ac', LOGIN_GLOBAL_DAY);
     // Cada token vale una sola vez (si alguien lo copiara de una dirección, no serviría)
     const [fresh] = await redis([['SET', `ac:used:${sha(body.credential)}`, '1', 'NX', 'EX', '1200']], false);
     if (fresh === null || fresh === undefined) throw new HttpError(401, 'invalid_token');
@@ -164,7 +171,7 @@ async function finish(body, req) {
 
 async function claim(body, req, res) {
     if (typeof body.secret !== 'string' || !STATE_RE.test(body.secret)) throw new HttpError(400, 'invalid_claim');
-    await limitCreate(req, 'acl', CLAIM_PER_IP_HOUR, CLAIM_GLOBAL_DAY);
+    await limitIp(req, 'acl', CLAIM_PER_IP_HOUR);
     // GETDEL: el recado se recoge una sola vez
     const [raw] = await redis([['GETDEL', claimKey(sha(body.secret))]], false);
     if (typeof raw !== 'string') throw new HttpError(404, 'not_ready');
@@ -175,6 +182,8 @@ async function claim(body, req, res) {
         data = null;
     }
     if (!data || typeof data.sub !== 'string' || !/^[0-9]{5,40}$/.test(data.sub)) throw new HttpError(404, 'not_ready');
+    // El tope global solo cuenta las sesiones que de verdad se inician (los sondeos «todavía no» no gastan)
+    await limitGlobal('acl', CLAIM_GLOBAL_DAY);
     const { sub } = data;
     const email = typeof data.email === 'string' ? data.email : '';
     const name = typeof data.name === 'string' ? data.name : '';
@@ -268,20 +277,46 @@ function readSections(flat) {
     return out;
 }
 
+// Las escrituras de una cuenta van de una en una. Sin esto, dos móviles que subían a la vez leían la misma revisión,
+// los dos la subían a la misma y ninguno recibía lo del otro (ni se avisaba de un conflicto en la misma sección).
+// SET NX EX es un cerrojo sencillo: si el móvil que lo tiene se cae, caduca solo a los LOCK_SECONDS.
+async function withLock(sub, work) {
+    const lock = `ac:${sub}:lock`;
+    const giveUp = Date.now() + LOCK_WAIT_MS;
+    for (;;) {
+        const [got] = await redis([['SET', lock, '1', 'NX', 'EX', LOCK_SECONDS]], false);
+        if (got === 'OK') break;
+        if (Date.now() >= giveUp) throw new HttpError(409, 'busy');
+        await new Promise(resolve => setTimeout(resolve, 120));
+    }
+    try {
+        return await work();
+    } finally {
+        await redis([['DEL', lock]], false).catch(() => undefined);
+    }
+}
+
 async function sync(body, req) {
-    const { sub } = await session(req);
-    const k = keys(sub);
+    const { sub, hash } = await session(req, false);
     const since = Number.isSafeInteger(body.since) && body.since >= 0 ? body.since : 0;
     const push = cleanPush(body.push);
     const del = cleanDel(body.del, new Set(push.map(entry => entry.key)));
     const writing = push.length > 0 || del.length > 0;
+    return writing ? withLock(sub, () => syncData(sub, hash, since, push, del, writing)) : syncData(sub, hash, since, push, del, writing);
+}
 
+async function syncData(sub, hash, since, push, del, writing) {
+    const k = keys(sub);
     const minute = Math.floor(Date.now() / 60_000);
     const limitKey = `ac:${sub}:rl:${minute}`;
-    const first = [['INCR', limitKey], ['EXPIRE', limitKey, 120], ['GET', k.rev]];
+    // «renew»: como mucho una vez al día se renuevan la sesión y los datos (leer también cuenta como usar la cuenta)
+    const first = [['INCR', limitKey], ['EXPIRE', limitKey, 120], ['GET', k.rev], ['SET', `ac:${sub}:renew`, '1', 'NX', 'EX', 86400]];
     if (writing) first.push(['HLEN', k.sections]);
-    const [used, , revRaw, length] = await redis(first, false);
+    const [used, , revRaw, renewed, length] = await redis(first, false);
     if (Number(used) > SYNC_PER_MINUTE) throw new HttpError(429, 'rate_limited');
+    if (renewed === 'OK') {
+        await redis([['EXPIRE', sessionKey(hash), SESSION_TTL], ['EXPIRE', k.rev, DATA_TTL], ['EXPIRE', k.sections, DATA_TTL], ['EXPIRE', k.sessions, DATA_TTL]], false);
+    }
     const serverRev = Number(revRaw) || 0;
 
     // Sin cambios en el servidor desde la revisión del móvil no hace falta leer nada (no puede haber conflictos)
