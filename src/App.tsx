@@ -8,6 +8,7 @@ import useAccount from "./hooks/useAccount"
 import useMercadona from "./hooks/useMercadona"
 import usePriceHistory from "./hooks/usePriceHistory"
 import useMediaQuery from "./hooks/useMediaQuery"
+import usePop from "./hooks/usePop"
 import type { SearchableProduct } from "./hooks/useMercadona"
 
 import type { listItem, orderItem } from "./types/types"
@@ -671,6 +672,7 @@ function App() {
   // para elegir cuando hay varias o alguna está compartida (aunque sea una sola); y si solo hay una, que es
   // la de este móvil, se abre directa (la lista de siempre).
   const showAllLists = !pinnedId && (lists.length > 1 || hasSharedList);
+  const badgeRef = usePop<HTMLSpanElement>(showAllLists ? lists.length : lineCount);
   const openFromBar = () => {
     if (pinnedId && currentId !== pinnedId) openList(pinnedId);
     setMobileView(showAllLists ? "lists" : "list");
@@ -1356,7 +1358,7 @@ function App() {
           >
             <span aria-hidden="true" className="relative h-7 grid place-items-center">
               <ShoppingBasket size={22} />
-              <span className="absolute -top-1.5 left-[15px] min-w-[22px] h-[22px] px-1 rounded-pill bg-highlight text-on-highlight text-sm font-bold grid place-items-center tabular">
+              <span ref={badgeRef} className="absolute -top-1.5 left-[15px] min-w-[22px] h-[22px] px-1 rounded-pill bg-highlight text-on-highlight text-sm font-bold grid place-items-center tabular">
                 {showAllLists ? lists.length : lineCount}
               </span>
             </span>

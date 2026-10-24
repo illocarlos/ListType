@@ -600,3 +600,8 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 - Dónde: hojas/diálogos (suben en móvil, aparecen en escritorio; el fondo se funde), secciones plegables al abrirse, fila de un producto recién añadido a la lista (no se anima al abrir la app ni al abrir la hoja de la lista), botón + al pulsarlo, pantallas de entrada y de zona, avisos del catálogo y formulario de otra tienda.
 - No se anima (a propósito): cambio de pestaña (se repetiría al arrancar o al repintar), salida de hojas y quitar filas (llevan deshacer y manejo de foco).
 - Prueba nueva e2e40 (29 comprobaciones, móvil/escritorio/reducido). No medido en un móvil real.
+
+## 2026-10-24 — Animaciones más marcadas
+- A petición del dueño («no veo diferencia»): entradas de 220 a 360 ms (antes 160–240) y más recorrido (secciones 16 px, hojas del móvil 64 px, fila nueva 20 px con un leve escalado). Siguen siendo solo `opacity`/`transform`, una vez y sin dejar nada activo.
+- Nuevo: el número de la cesta da un salto al cambiar (`usePop`, WAAPI, no al abrir la app ni con «reducir movimiento»).
+- Aviso para las pruebas: axe mide el contraste con la opacidad del instante; con animaciones más largas daba falsos «contraste insuficiente» a mitad de un fundido. `audit.py` y e2e14 esperan 700 ms antes de medir. Los textos terminan con el contraste normal.
