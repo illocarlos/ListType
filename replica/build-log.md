@@ -557,3 +557,26 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 - Lo que llega de otro móvil se escribe sin anotarlo como edición propia (las horas vienen de quien lo editó).
 - Los favoritos apuntados a mano siguen sin duplicarse (mismo nombre y tienda = uno).
 - Servidor sin cambios: las horas viajan dentro de cada sección (`ts`, `del`; en la meta, `mt`).
+
+## 2026-10-24 · Entrar con Google en el iPhone (app instalada) y entrada obligatoria opcional
+
+**Por qué.** En un iPhone con la app en la pantalla de inicio, Google se abre en una ventana de Safari que no comparte almacenamiento con la app: el `nonce` y la cookie quedaban en otro sitio y la entrada no llegaba a la app. El aviso «entra una vez desde Safari y luego abre la app» tampoco habría funcionado. Se rehace la entrada en dos pasos.
+
+**Cómo entra ahora**
+1. La app genera un secreto `S` (256 bits) que no sale de ella (`account:login`, 10 min) y manda a Google solo `state = nonce = sha256(S)`.
+2. La página a la que Google devuelve (la app misma o la ventana de Safari) entrega el token a `op: finish` {credential, state}: el servidor comprueba firma, `aud`, caducidad, un solo uso y que el `nonce` del token es ese `state`. Deja un recado (`ac:c:{state}`, 10 min) con el identificador de la cuenta (y correo/nombre, que se borran al recogerlos). **No hay sesión ni cookie en este paso.**
+3. Solo la app, que conoce `S`, recoge la sesión con `op: claim` {secret}: `GETDEL` (un solo uso), crea la sesión y pone la cookie en la app. Si Google devolvió a la propia app, se recoge al momento; si no, la app sondea cada 5 s (solo a la vista, como mucho 10 min) y al volver a verse.
+- La ventana de Safari enseña «Ya has entrado con Google: vuelve a la app» y no guarda cuenta.
+- Seguridad: con la huella pública (`state`) no se puede recoger; un token con otro nonce no sirve; el recado caduca y se borra; límites propios (400/h por IP y 6000/día para recoger). Se quita `op: login` (sustituido por finish + claim).
+- Carrera corregida: al volver de Google la propia página y el sondeo podían recoger a la vez (uno quitaba el recado al otro y salía «vuelve a la app» con la sesión ya iniciada). Ahora el sondeo no corre mientras la página recoge por sí misma.
+
+**Entrada obligatoria (interruptor)**
+- Variable `LOGIN_REQUIRED=1` en Vercel (por defecto no): `GET /api/cuenta` devuelve `required` (solo si Google está configurado). Sin cuenta y con `required`, la app se tapa con una pantalla de entrada; con cuenta (aunque la sesión haya caducado) nunca se tapa. Sin conexión con el servidor se usa lo último que dijo (`account:config`); la primera vez, sin hint, la app se ve un instante antes de taparse.
+- Un enlace compartido (`#lista=` / `#favoritos=`) abierto antes de entrar se conserva y se retoma al entrar (`account:return`).
+- No aplica en la dirección vieja.
+- Si la entrada falla en un móvil, esa persona queda fuera: por eso es un interruptor y no está activo por defecto. Para quitarlo, `LOGIN_REQUIRED` fuera y redeploy.
+
+**Límites**
+- Sigue sin probarse en un iPhone real (la prueba simula la ventana de Safari con otro contexto de navegador y una navegación que no cambia la página).
+- Con la entrada obligatoria hace falta conexión la primera vez en cada móvil.
+- Pruebas: `e2e38` 24/24, `apicuenta.mjs` 80/80, `e2e36` 42/42, `e2e37` 15/15 y regresión completa.
