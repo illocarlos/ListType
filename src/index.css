@@ -58,6 +58,44 @@
   .safe-top {
     padding-top: env(safe-area-inset-top);
   }
+
+  /* Animaciones de entrada, sutiles y baratas: solo opacidad y transform (se pintan en la tarjeta gráfica), una vez, de 160 a 240 ms.
+     "backwards": al terminar el elemento vuelve a su estilo normal (nada se queda en una capa aparte).
+     Con "reducir movimiento" el bloque de abajo las deja en 1 ms. */
+  .anim-fade-in {
+    animation: fade-in 200ms var(--ease) backwards;
+  }
+
+  .anim-rise {
+    animation: rise-in 220ms var(--ease) backwards;
+  }
+
+  .anim-sheet-backdrop {
+    animation: fade-in 180ms linear backwards;
+  }
+
+  /* Hoja de abajo en el móvil: sube; diálogo centrado en escritorio: solo aparece (su transform ya sirve para centrarlo) */
+  .anim-sheet-panel {
+    animation: sheet-up 240ms var(--ease) backwards;
+  }
+
+  @media (min-width: 768px) {
+    .anim-sheet-panel {
+      animation: fade-in 160ms var(--ease) backwards;
+    }
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(24px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

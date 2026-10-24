@@ -17,7 +17,7 @@ type GateProps = {
 
 export const LoginGate = ({ busy, waiting, error, hasInvite, onSignIn, onCancel }: GateProps) => (
     <main className="min-h-screen grid place-items-center bg-bg px-4 py-10 safe-top safe-bottom">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm anim-fade-in">
             <h1 className="text-2xl font-bold">MercaLista</h1>
             <p className="mt-3 text-base">
                 Para usar la app entra con tu cuenta de Google. Solo hace falta la primera vez en cada móvil.
@@ -49,7 +49,7 @@ export const LoginGate = ({ busy, waiting, error, hasInvite, onSignIn, onCancel 
 
 export const LoginReturned = () => (
     <main className="min-h-screen grid place-items-center bg-bg px-4 py-10 safe-top safe-bottom">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm anim-fade-in">
             <h1 className="text-2xl font-bold">Ya has entrado con Google</h1>
             <p role="status" className="mt-3 text-base">
                 Vuelve a la app MercaLista: cierra esta ventana con «OK» o cambia a ella. La entrada se completa sola en unos segundos.

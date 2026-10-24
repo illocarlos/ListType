@@ -92,7 +92,7 @@ const AddStoreProduct = ({ id, favorites, takenIds, onSave, onCancel }: AddStore
             }}
             noValidate
             aria-labelledby={ids.title}
-            className="mb-4 rounded-md border-2 border-accent bg-surface p-4"
+            className="mb-4 rounded-md border-2 border-accent bg-surface p-4 anim-rise"
         >
             <h3 id={ids.title} className="flex items-center gap-2 text-lg font-bold">
                 <Store size={22} aria-hidden="true" className="flex-none text-accent" />

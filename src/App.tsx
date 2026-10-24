@@ -565,7 +565,7 @@ function App() {
       )}
 
       {mercadona.indexState === "running" && mercadona.indexProgress && (
-        <div className="mb-4" role="status" aria-live="polite">
+        <div className="mb-4 anim-rise" role="status" aria-live="polite">
           <p className="text-sm text-muted mb-1.5">
             Cargando productos de Mercadona: {mercadona.indexProgress.done} de {mercadona.indexProgress.total} pasillos. Solo la primera vez al día.
           </p>
@@ -579,7 +579,7 @@ function App() {
       )}
 
       {mercadona.indexState === "stopped" && mercadona.indexProgress && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-surface p-3" role="status">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-surface p-3 anim-rise" role="status">
           <p className="text-sm text-muted">
             {missingAisles === 1 ? "Falta 1 pasillo" : `Faltan ${missingAisles} pasillos`} por cargar: puede faltar algún producto.
           </p>

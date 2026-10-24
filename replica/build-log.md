@@ -594,3 +594,9 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 - **Botón de entrar con Google**: blanco, borde gris y texto oscuro (estilo neutro de Google), sin icono. El logo oficial de Google no se dibuja a mano: hay que usar el archivo oficial de la guía de marca de Google (pendiente de que lo aporte el dueño).
 - **Caducidad sin cambios** (decisión del dueño): sesión 60 días (se renueva al usar), datos 365 días (se renuevan al sincronizar). Pasado el primer plazo basta con volver a entrar con la misma cuenta de Google; pasado el segundo, los datos del servidor se pierden (los del móvil se conservan).
 - Pruebas: nuevas e2e39 (22 comprobaciones); e2e5 y e2e26 actualizadas.
+
+## 2026-10-24 — Animaciones sutiles
+- Solo `opacity` y `transform` (se pintan en la tarjeta gráfica), una vez, de 160 a 240 ms, con relleno `backwards` (al terminar no queda nada en una capa aparte). Con «reducir movimiento» del sistema, todas pasan a 1 ms (regla global ya existente) y la animación de la fila nueva no se lanza.
+- Dónde: hojas/diálogos (suben en móvil, aparecen en escritorio; el fondo se funde), secciones plegables al abrirse, fila de un producto recién añadido a la lista (no se anima al abrir la app ni al abrir la hoja de la lista), botón + al pulsarlo, pantallas de entrada y de zona, avisos del catálogo y formulario de otra tienda.
+- No se anima (a propósito): cambio de pestaña (se repetiría al arrancar o al repintar), salida de hojas y quitar filas (llevan deshacer y manejo de foco).
+- Prueba nueva e2e40 (29 comprobaciones, móvil/escritorio/reducido). No medido en un móvil real.

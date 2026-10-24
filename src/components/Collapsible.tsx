@@ -33,7 +33,8 @@ const Collapsible = ({ title, count, defaultOpen = false, children }: Collapsibl
                     <ChevronDown size={20} aria-hidden="true" className={`flex-none transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} />
                 </button>
             </h3>
-            <div id={panelId} hidden={!open} className="pt-2 pb-2">
+            {/* Al abrirse (pasa de oculto a visible) el contenido aparece con un leve desplazamiento */}
+            <div id={panelId} hidden={!open} className="pt-2 pb-2 anim-rise">
                 {open && children}
             </div>
         </div>
