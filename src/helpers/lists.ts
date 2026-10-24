@@ -20,6 +20,7 @@ export type ListMeta = { id: string, name: string };
 export type Registry = { current: string, pinned: string | null, lists: ListMeta[] };
 
 export const MAX_LISTS = 20;
+export const DEFAULT_LIST_NAME = "La compra";
 export const cleanListName = (text: string) => text.trim().replace(/\s+/g, " ").slice(0, 40);
 
 function newLocalId(): string {
@@ -101,9 +102,17 @@ function migrate(): Registry {
         remove(OLD_SHARED_KEY);
     }
     remove(OLD_ORDER_KEY);
-    const registry: Registry = { current: id, pinned: null, lists: [{ id, name: "La compra" }] };
+    const registry: Registry = { current: id, pinned: null, lists: [{ id, name: DEFAULT_LIST_NAME }] };
     writeRegistry(registry);
     return registry;
+}
+
+// Para la sincronización de la cuenta: sustituye el registro entero y borra los datos de una lista
+export const replaceRegistry = (registry: Registry) => writeRegistry(registry);
+
+export function dropListData(id: string) {
+    remove(orderKey(id));
+    remove(sharedKey(id));
 }
 
 // Fija una lista (o quita la fijada con null). Solo hay una fijada a la vez.
@@ -151,7 +160,7 @@ export function deleteList(id: string): Registry {
     if (lists.length === 0) {
         const fresh = newLocalId();
         saveImportant(orderKey(fresh), JSON.stringify([]));
-        lists = [{ id: fresh, name: "La compra" }];
+        lists = [{ id: fresh, name: DEFAULT_LIST_NAME }];
         current = fresh;
     } else if (current === id) {
         current = lists[0].id;

@@ -94,6 +94,11 @@ function migrate(): FavRegistry {
     return registry;
 }
 
+// Para la sincronización de la cuenta: sustituye el registro entero y borra los datos de una colección
+export const replaceFavRegistry = (registry: FavRegistry) => writeRegistry(registry);
+
+export const dropCollectionData = (id: string) => remove(itemsKey(id));
+
 export function setPinnedCollection(id: string | null): FavRegistry {
     const registry = loadFavRegistry();
     const next = { ...registry, pinned: id !== null && registry.lists.some(list => list.id === id) ? id : null };
