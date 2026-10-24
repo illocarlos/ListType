@@ -55,7 +55,8 @@ async function allowUpstream(req, res, kind) {
         await limitGlobal(prefix, perDay);
         return true;
     } catch (error) {
-        if (error?.status !== 429) return true;
+        // Solo el tope propio corta; un 429 de la base de datos (cupo agotado) o cualquier otro fallo deja pasar
+        if (error?.code !== 'rate_limited') return true;
         console.warn(`[PROXY_TOPE] ruta=${kind}`);
         res.setHeader('Retry-After', '600');
         sendError(res, 429, 'rate_limited');

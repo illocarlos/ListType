@@ -226,7 +226,7 @@ async function deleteAccount(req, res) {
     const k = keys(sub);
     const [hashes] = await redis([['SMEMBERS', k.sessions]], false);
     const minute = Math.floor(Date.now() / 60_000);
-    const commands = [['DEL', k.rev, k.sections, k.sessions, `ac:${sub}:rl:${minute}`, `ac:${sub}:rl:${minute - 1}`]];
+    const commands = [['DEL', k.rev, k.sections, k.sessions, `ac:${sub}:renew`, `ac:${sub}:rl:${minute}`, `ac:${sub}:rl:${minute - 1}`]];
     for (const hash of Array.isArray(hashes) ? hashes : []) {
         if (SESSION_RE.test(hash) || /^[a-f0-9]{64}$/.test(hash)) commands.push(['DEL', sessionKey(hash)]);
     }
