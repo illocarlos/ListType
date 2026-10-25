@@ -23,6 +23,7 @@ import MercadonaCatalog from "./components/MercadonaCatalog.tsx"
 import ProductRow from "./components/ProductRow.tsx"
 import Sheet from "./components/Sheet.tsx"
 import InstallHint from "./components/InstallHint.tsx"
+import { needsInstallFirst } from "./helpers/install.ts"
 import ZoneCard from "./components/ZoneCard.tsx"
 import ProductSheet from "./components/ProductSheet.tsx"
 import AppUpdate from "./components/AppUpdate.tsx"
@@ -35,7 +36,7 @@ import { JoinPanel, NameRequiredPanel, SharePanel, ShareRow } from "./components
 import MyLists from "./components/MyLists.tsx"
 import MyFavorites from "./components/MyFavorites.tsx"
 import AccountPanel from "./components/AccountPanel.tsx"
-import { LoginGate, LoginReturned } from "./components/LoginGate.tsx"
+import { InstallFirst, LoginGate, LoginReturned } from "./components/LoginGate.tsx"
 import { ZoneLoading, ZoneScreen } from "./components/ZoneScreen.tsx"
 import { ReceiveFavoritesPanel, ShareFavoritesPanel } from "./components/FavoritesShare.tsx"
 import { MAX_LISTS } from "./helpers/lists"
@@ -890,6 +891,7 @@ function App() {
 
   // Cuenta de Google: ventana a la que Google devolvió (la app la recoge desde donde empezó) o entrada obligatoria sin cuenta
   if (accountApi.returned) return <LoginReturned />;
+  if (accountApi.gate && needsInstallFirst()) return <InstallFirst hasInvite={Boolean(invite || favInvite)} />;
   if (accountApi.gate) {
     return (
       <LoginGate
@@ -1442,6 +1444,7 @@ function App() {
             busy={accountApi.busy}
             waiting={accountApi.waiting}
             error={accountApi.error}
+            needsInstall={needsInstallFirst()}
             onSignIn={() => accountApi.signIn()}
             onCancelLogin={accountApi.cancelLogin}
             onSyncNow={accountApi.syncNow}

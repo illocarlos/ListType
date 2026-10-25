@@ -36,6 +36,11 @@ export function subscribeInstall(listener: () => void) {
 
 export type InstallMode = "installed" | "button" | "ios" | "android-menu" | "none";
 
+// Regla del dueño: en un móvil o tableta solo se puede entrar con la cuenta desde la app instalada.
+// Es una guía de uso, no una medida de seguridad: el servidor no puede saber desde dónde se abre la web.
+// Para quitarla basta con poner esto a false.
+export const INSTALL_BEFORE_LOGIN = true;
+
 export function isStandalone(): boolean {
     return (navigator as Navigator & { standalone?: boolean }).standalone === true
         || window.matchMedia("(display-mode: standalone)").matches;
@@ -44,6 +49,25 @@ export function isStandalone(): boolean {
 export function isIOS(): boolean {
     const ua = navigator.userAgent;
     return /iPhone|iPad|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
+}
+
+export function isPhoneOrTablet(): boolean {
+    return isIOS() || /Android/i.test(navigator.userAgent);
+}
+
+// Navegadores que se abren dentro de otra app (WhatsApp, Instagram, Facebook…): desde ahí no se puede instalar nada.
+// Aviso: es una detección aproximada por el agente de usuario; Apple no da una forma segura de saberlo.
+export function isInAppBrowser(): boolean {
+    const ua = navigator.userAgent;
+    if (/FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Snapchat|TikTok|Twitter|GSA\//i.test(ua)) return true;
+    if (/Android/i.test(ua)) return /;\s?wv\)/.test(ua);
+    // iPhone: Safari, Chrome (CriOS), Firefox (FxiOS) y Edge (EdgiOS) llevan su marca; una vista web sin marca es de otra app
+    return isIOS() && !/Safari\/|CriOS|FxiOS|EdgiOS/.test(ua);
+}
+
+// true = esta persona está en un móvil, en el navegador y no en la app instalada, y por tanto aún no puede entrar
+export function needsInstallFirst(): boolean {
+    return INSTALL_BEFORE_LOGIN && isPhoneOrTablet() && !isStandalone();
 }
 
 // Qué se le puede ofrecer a este usuario en este navegador

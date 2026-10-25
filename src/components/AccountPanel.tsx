@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, CloudOff, LogOut, RefreshCw, Trash2, UserRound } from "lucide-react";
 import type { AccountState, SyncState } from "../helpers/account";
+import InstallGuide from "./InstallGuide";
 
 const STATE_TEXT: Record<SyncState, string> = {
     off: "",
@@ -18,6 +19,7 @@ type Props = {
     busy: boolean,
     waiting: boolean,
     error: string,
+    needsInstall: boolean,
     onSignIn: () => void,
     onCancelLogin: () => void,
     onSyncNow: () => void,
@@ -39,7 +41,7 @@ const WhatIsSaved = () => (
     </ul>
 );
 
-const AccountPanel = ({ account, syncState, busy, waiting, error, onSignIn, onCancelLogin, onSyncNow, onLeave, onDeleteAll, onClose }: Props) => {
+const AccountPanel = ({ account, syncState, busy, waiting, error, needsInstall, onSignIn, onCancelLogin, onSyncNow, onLeave, onDeleteAll, onClose }: Props) => {
     const [confirm, setConfirm] = useState<"leave" | "delete" | null>(null);
     const [deleted, setDeleted] = useState<boolean>(false);
 
@@ -49,9 +51,17 @@ const AccountPanel = ({ account, syncState, busy, waiting, error, onSignIn, onCa
                 {deleted && <p role="status" className="mb-3 rounded-md bg-surface-sunk p-3 text-base font-semibold">Tu cuenta y tus datos se han borrado de internet. Lo de este móvil se queda.</p>}
                 <p className="text-base">Entra con Google para tener tus listas y favoritos en todos tus móviles y no perderlos si cambias de teléfono.</p>
                 <WhatIsSaved />
-                <button type="button" onClick={onSignIn} disabled={busy || waiting} className={`mt-4 ${google}`}>
-                    {busy ? "Entrando…" : "Entrar con Google"}
-                </button>
+                {needsInstall ? (
+                    <section aria-labelledby="install-first" className="mt-4 rounded-md bg-accent-soft p-4 text-on-accent-soft">
+                        <h3 id="install-first" className="text-base font-bold">Primero instala la app</h3>
+                        <p className="mt-1 text-base">Para entrar con tu cuenta, instala la app en tu móvil y ábrela desde su icono.</p>
+                        <InstallGuide />
+                    </section>
+                ) : (
+                    <button type="button" onClick={onSignIn} disabled={busy || waiting} className={`mt-4 ${google}`}>
+                        {busy ? "Entrando…" : "Entrar con Google"}
+                    </button>
+                )}
                 {waiting && (
                     <div role="status" className="mt-3 rounded-md bg-surface-sunk p-3 text-base">
                         <p className="font-semibold">Esperando a que termines de entrar en Google…</p>
