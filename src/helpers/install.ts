@@ -79,14 +79,29 @@ export function getInstallMode(): InstallMode {
     return "none";
 }
 
-// Abre el diálogo oficial de instalación (solo si el navegador lo ha ofrecido)
-export async function promptInstall(): Promise<"accepted" | "dismissed" | "unavailable"> {
+export type InstallOutcome = "accepted" | "dismissed" | "unavailable" | "error";
+
+let prompting = false;
+
+// Abre el diálogo oficial de instalación (solo si el navegador lo ha ofrecido).
+// El aviso se guarda hasta que la persona contesta: así el botón no cambia por el texto del menú mientras el diálogo está abierto.
+// El navegador solo deja usarlo una vez; si falla o se rechaza, se descarta y la app enseña el camino del menú.
+export async function promptInstall(): Promise<InstallOutcome> {
     const event = deferredPrompt;
-    if (!event) return "unavailable";
-    deferredPrompt = null; // el navegador solo deja usarlo una vez
-    await event.prompt();
-    const { outcome } = await event.userChoice;
-    if (outcome === "accepted") installed = true;
-    notify();
-    return outcome;
+    if (!event || prompting) return "unavailable";
+    prompting = true;
+    try {
+        // Se llama sin esperar nada antes: el navegador solo lo permite dentro del toque del botón
+        const [, choice] = await Promise.all([event.prompt(), event.userChoice]);
+        const outcome = choice.outcome;
+        deferredPrompt = null;
+        if (outcome === "accepted") installed = true;
+        return outcome;
+    } catch {
+        deferredPrompt = null;
+        return "error";
+    } finally {
+        prompting = false;
+        notify();
+    }
 }
