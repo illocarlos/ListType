@@ -6,12 +6,13 @@
 //   (JS, CSS y fuentes de /assets/), para que la siguiente apertura sin cobertura no salga en blanco.
 //   Los de versiones anteriores se borran.
 // - Archivos de /assets/ (llevan huella en el nombre): primero la caché.
+// - /tema.js (modo día/noche): primero la red y, sin conexión, la copia guardada.
 // - /api/ y todo lo de otros dominios (Mercadona) no pasa por aquí: lo gestiona la app.
 
 const CACHE = 'lista-compra-v2';
 // Cuánto se espera a la red al abrir la app antes de usar la copia guardada
 const NAV_TIMEOUT_MS = 3000;
-const SHELL = ['/manifest.webmanifest', '/favicon.svg', '/apple-touch-icon.png', '/icon-192.png'];
+const SHELL = ['/tema.js', '/manifest.webmanifest', '/favicon.svg', '/apple-touch-icon.png', '/icon-192.png'];
 
 const isGoodPage = response =>
     response && response.ok && response.type === 'basic' && !response.redirected
@@ -112,6 +113,12 @@ self.addEventListener('fetch', event => {
                 return (await caches.match('/')) || network;
             }
         })());
+        return;
+    }
+
+    // tema.js (modo día/noche) se pide en cada apertura; sin red, la copia guardada
+    if (url.pathname === '/tema.js') {
+        event.respondWith(fetch(request).catch(async () => (await caches.match(request)) || Response.error()));
         return;
     }
 

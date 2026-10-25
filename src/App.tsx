@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Pin, Plus, RefreshCw, Search, Share2, ShoppingBasket, Sparkles, Trash2, Undo2, UserRound, X } from "lucide-react"
+import { AlertTriangle, BadgePercent, CheckCheck, ChevronLeft, Heart, LayoutGrid, LayoutList, Pin, Plus, RefreshCw, Search, Share2, ShoppingBasket, Sparkles, Trash2, Undo2, SunMoon, UserRound, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 // hooks: la lista, los favoritos (los dos en localStorage) y el catálogo de Mercadona
 import useList, { cleanName } from "./hooks/useList"
@@ -24,6 +24,8 @@ import ProductRow from "./components/ProductRow.tsx"
 import Sheet from "./components/Sheet.tsx"
 import InstallHint from "./components/InstallHint.tsx"
 import { needsInstallFirst } from "./helpers/install.ts"
+import ThemeSheet from "./components/ThemeSheet.tsx"
+import { themeAvailable } from "./helpers/theme.ts"
 import ZoneCard from "./components/ZoneCard.tsx"
 import ProductSheet from "./components/ProductSheet.tsx"
 import AppUpdate from "./components/AppUpdate.tsx"
@@ -119,6 +121,7 @@ function App() {
   // «Ahora no» en la pantalla de zona que sale tras entrar con la cuenta
   const [zoneSkip, setZoneSkip] = useState<boolean>(zoneSkipped);
   const [accountOpen, setAccountOpen] = useState<boolean>(false);
+  const [themeOpen, setThemeOpen] = useState<boolean>(false);
   const closeAccount = useCallback(() => setAccountOpen(false), []);
   // Si al volver de Google algo falla, se abre la hoja para que se vea el aviso
   useEffect(() => {
@@ -919,17 +922,29 @@ function App() {
         <div className="mx-auto max-w-content px-4">
           <div className="flex h-14 items-center justify-between">
             <h1 id="app-title" tabIndex={-1} className="text-xl font-extrabold tracking-tight focus:outline-none focus-visible:outline-highlight">Lista de la compra</h1>
-            {accountApi.available && (
-              <button
-                type="button"
-                onClick={() => setAccountOpen(true)}
-                className="h-11 px-3 -mr-3 inline-flex items-center gap-1.5 rounded-pill text-base font-semibold hover:bg-on-bar/10"
-              >
-                <UserRound size={20} aria-hidden="true" />
-                <span>{accountApi.account ? "Mi cuenta" : "Entrar"}</span>
-                {accountApi.account && accountApi.syncState === "signedout" && <span className="sr-only"> (sesión caducada)</span>}
-              </button>
-            )}
+            <div className="flex items-center">
+              {themeAvailable() && (
+                <button
+                  type="button"
+                  onClick={() => setThemeOpen(true)}
+                  aria-label="Apariencia: modo día o noche"
+                  className="h-11 w-11 grid place-items-center rounded-pill hover:bg-on-bar/10"
+                >
+                  <SunMoon size={22} aria-hidden="true" />
+                </button>
+              )}
+              {accountApi.available && (
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen(true)}
+                  className="h-11 px-3 -mr-3 inline-flex items-center gap-1.5 rounded-pill text-base font-semibold hover:bg-on-bar/10"
+                >
+                  <UserRound size={20} aria-hidden="true" />
+                  <span>{accountApi.account ? "Mi cuenta" : "Entrar"}</span>
+                  {accountApi.account && accountApi.syncState === "signedout" && <span className="sr-only"> (sesión caducada)</span>}
+                </button>
+              )}
+            </div>
           </div>
           <div className="pb-3 md:pr-[412px]">
             <label htmlFor="search" className="sr-only">Buscar productos de Mercadona</label>
@@ -1433,6 +1448,11 @@ function App() {
           onLeave={leaveList}
           onJoinCode={joinFromPaste}
         />
+      </Sheet>
+
+      {/* Apariencia: modo día o noche */}
+      <Sheet open={themeOpen} title="Apariencia" onClose={() => setThemeOpen(false)}>
+        {themeOpen && <ThemeSheet />}
       </Sheet>
 
       {/* Cuenta opcional con Google */}
