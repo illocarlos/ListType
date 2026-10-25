@@ -4,6 +4,7 @@ import {
     hasPendingRemote, isAccountKey, loadAccount, onSyncState, resetSyncState, signOut, startGoogleLogin, syncNow, takeGoogleResult,
     takeReturnInvite, type AccountConfig, type AccountState,
 } from "../helpers/account";
+import { needsInstallFirst } from "../helpers/install";
 import { isOldHost } from "../helpers/move";
 
 // Cuenta opcional con Google. Cuándo se sincroniza (sin sondeos: cada comprobación cuesta una operación en la base de datos):
@@ -217,6 +218,11 @@ export default function useAccount() {
     const signIn = useCallback((keepInvite?: boolean) => {
         setError("");
         if (!clientId) return;
+        // En un móvil solo se entra desde la app instalada (la pantalla ya no ofrece el botón; esto cubre cualquier otro camino)
+        if (needsInstallFirst()) {
+            setError("Para entrar, instala primero la app en tu móvil y ábrela desde su icono.");
+            return;
+        }
         startGoogleLogin(clientId, keepInvite === true)
             .then(() => setWaiting(true))
             .catch(failure => setError(accountErrorText(failure)));

@@ -3,6 +3,8 @@
 // - LoginReturned: Google devolvió a ESTA ventana (en un iPhone, la ventana de Safari que abre la app instalada);
 //   la sesión la recoge la app desde la que se empezó, así que aquí solo se avisa.
 
+import InstallGuide from "./InstallGuide";
+
 const google = "w-full h-12 inline-flex items-center justify-center rounded-md border border-[#dadce0] bg-white text-[#3c4043] text-base font-medium hover:bg-[#f8f9fa] disabled:opacity-60";
 const quiet = "w-full h-12 rounded-md border border-border bg-surface text-base font-semibold hover:bg-surface-sunk disabled:opacity-60";
 
@@ -42,6 +44,27 @@ export const LoginGate = ({ busy, waiting, error, hasInvite, onSignIn, onCancel 
             <p className="mt-4 text-sm text-muted">
                 En un iPhone con la app en la pantalla de inicio, Google se abre en una ventana de Safari. Al terminar, vuelve a la app
                 (cierra esa ventana con «OK» o cambia a MercaLista).
+            </p>
+        </div>
+    </main>
+);
+
+// En un móvil, en el navegador: antes de entrar hay que instalar la app y abrirla desde su icono
+export const InstallFirst = ({ hasInvite }: { hasInvite: boolean }) => (
+    <main className="min-h-screen grid place-items-center bg-bg px-4 py-10 safe-top safe-bottom">
+        <div className="w-full max-w-sm anim-fade-in">
+            <h1 className="text-2xl font-bold">MercaLista</h1>
+            <p className="mt-3 text-base">
+                Para entrar con tu cuenta de Google, primero instala la app en tu móvil. Después, ábrela desde su icono y entra ahí.
+            </p>
+            {hasInvite && (
+                <p className="mt-3 rounded-md bg-surface-sunk p-3 text-base">
+                    Has abierto un enlace compartido. Cuando tengas la app instalada, vuelve a abrir ese enlace.
+                </p>
+            )}
+            <InstallGuide />
+            <p className="mt-4 text-sm text-muted">
+                La app instalada guarda sus datos aparte del navegador: lo que tengas ahora en el navegador no pasa a ella.
             </p>
         </div>
     </main>
