@@ -2,6 +2,8 @@
 const role = name => `rgb(var(--color-${name}) / <alpha-value>)`
 
 export default {
+  // Modo noche: lo marca tema.js con data-theme="dark" en <html>
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}"
