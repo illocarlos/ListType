@@ -557,6 +557,15 @@ function App() {
 
   // Favoritos que Mercadona tiene rebajados ahora mismo
   const favoritesOnSale = favorites.filter(item => item.mercadonaId && mercadona.searchableById.get(item.mercadonaId)?.previousPrice);
+  // «Ver rebajados»: los favoritos rebajados salen primero en la lista de favoritos (el resto, en su orden de siempre)
+  const [saleFirst, setSaleFirst] = useState<boolean>(false);
+  useEffect(() => {
+    if (saleFirst && favoritesOnSale.length === 0) setSaleFirst(false);
+  }, [saleFirst, favoritesOnSale.length]);
+  const saleIds = new Set(favoritesOnSale.map(item => item.id));
+  const shownFavorites = saleFirst
+    ? [...filteredFavorites.filter(item => saleIds.has(item.id)), ...filteredFavorites.filter(item => !saleIds.has(item.id))]
+    : filteredFavorites;
 
   const catalogStatus = (
     <>
@@ -1270,10 +1279,15 @@ function App() {
                         </p>
                         <button
                           type="button"
-                          onClick={() => setHomeTab("rebajas")}
+                          aria-pressed={saleFirst}
+                          onClick={() => {
+                            // Sin filtro de categoría, para que se vean todos los rebajados
+                            setSelectedCheckbox(null);
+                            setSaleFirst(previous => !previous);
+                          }}
                           className="flex-none h-11 px-3 rounded-md bg-surface text-text text-base font-semibold"
                         >
-                          Ver rebajas
+                          {saleFirst ? "Orden normal" : "Ver rebajados"}
                         </button>
                       </div>
                     )}
@@ -1290,7 +1304,7 @@ function App() {
                       </div>
                     )}
                     <ul className="space-y-2">
-                      {filteredFavorites.map(favoriteRow)}
+                      {shownFavorites.map(favoriteRow)}
                     </ul>
                   </>
                 )}
