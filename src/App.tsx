@@ -533,6 +533,7 @@ function App() {
       onToggleFavorite={toggleFavoriteKeepFocus}
       note={changeNote(item)}
       onOpenDetails={openDetail}
+      tintOnSale
     />
   );
 

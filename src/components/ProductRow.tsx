@@ -20,13 +20,17 @@ type ProductRowProps = {
     onOpenDetails?: (item: listItem) => void,
     // Solo añadir (Favoritos): la fila no refleja lo que hay en la lista; siempre el botón +, y cada toque suma uno
     addOnly?: boolean,
+    // Favoritos: si el producto está rebajado, la fila lleva el mismo tono verdoso que las filas que están en la lista
+    tintOnSale?: boolean,
 }
 
 // Fila de producto compacta pensada para todo el mundo:
 // nombre completo (sin cortar), textos de 14 px como mínimo y botones de 44 px.
 // Precio y botón + van en la misma línea; la ficha se abre tocando el nombre (lleva el icono de información).
-const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite, note, onOpenDetails, addOnly = false }: ProductRowProps) => {
+const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, favorite = false, onToggleFavorite, note, onOpenDetails, addOnly = false, tintOnSale = false }: ProductRowProps) => {
     const inList = !addOnly && quantity > 0;
+    // Mismo criterio que la etiqueta de descuento de la fila
+    const onSale = Boolean(previousPrice && previousPrice > item.price && item.price > 0);
     // Tras añadir (solo Favoritos): el + enseña un ✓ un momento
     const [justAdded, setJustAdded] = useState<boolean>(false);
     useEffect(() => {
@@ -50,7 +54,7 @@ const ProductRow = ({ item, detail, previousPrice, quantity, onAdd, onDecrease, 
     return (
         <li
             data-row-id={item.id}
-            className={`flex gap-3 px-3 py-2 rounded-md transition-colors duration-200 ${inList ? "bg-accent-soft" : "bg-surface"}`}
+            className={`flex gap-3 px-3 py-2 rounded-md transition-colors duration-200 ${inList || (tintOnSale && onSale) ? "bg-accent-soft" : "bg-surface"}`}
         >
             <div className="pt-1">
                 <Thumb item={item} />

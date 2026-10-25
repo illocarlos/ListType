@@ -645,3 +645,8 @@ Entrar es **opcional**: sin cuenta la app funciona exactamente igual que antes. 
 - **Ahora:** el botón se llama «Ver rebajados» y no cambia de pestaña: pone los favoritos rebajados los primeros de la lista de Favoritos (el resto, en su orden de siempre). Pulsado, pasa a «Orden normal» y devuelve la lista a como estaba (`aria-pressed`). Quita el filtro de categoría si había uno, para que se vean todos los rebajados. No se guarda: al recargar, orden normal. Si deja de haber rebajados, el orden vuelve solo.
 - La pestaña Rebajas sigue como estaba.
 - Prueba: e2e10 actualizada (de 38 a 46 comprobaciones; falla con el código anterior).
+
+## 2026-10-25 — Favoritos rebajados con la fila verdosa
+- En la pestaña Favoritos (y en las colecciones), la fila de un favorito rebajado lleva el mismo fondo verdoso (`accent-soft`) que las filas que ya están en la lista; los que no están rebajados siguen blancos (`surface`). Va en modo día y noche (mismo rol de color). Criterio: el mismo que la etiqueta «−N %» de la fila (precio anterior mayor que el actual).
+- Solo en favoritos (`tintOnSale` de `ProductRow`): en Rebajas, búsqueda y pasillos el verde sigue significando «ya está en tu lista», para no mezclar los dos significados.
+- Prueba: e2e10 (de 46 a 51 comprobaciones: color en día y en noche, y axe en las dos; falla sin el cambio).
