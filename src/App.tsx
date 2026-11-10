@@ -13,7 +13,7 @@ import type { SearchableProduct } from "./hooks/useMercadona"
 
 import type { listItem, orderItem } from "./types/types"
 import { formatCurrency } from "./helpers/formatPrice"
-import { mercadonaDetail, normalizeText, skipZone, toListItem, zoneSkipped } from "./helpers/mercadona"
+import { mercadonaDetail, mercadonaNumericId, normalizeText, skipZone, toListItem, zoneSkipped } from "./helpers/mercadona"
 // componentes
 import OrderTotal from "./components/OrderTotal.tsx"
 import ButtonComponent from './components/ButtonComponent.tsx'
@@ -258,10 +258,15 @@ function App() {
   const mercadonaResults = useMemo<SearchableProduct[]>(() => {
     if (!term) return [];
     const { matches, score } = makeMatcher(term);
+    const favoriteIds = new Set(favorites.map(item => item.id));
     return mercadona.searchable
       .filter(product => matches(product.searchName))
-      .sort((a, b) => score(a.searchName) - score(b.searchName) || a.searchName.localeCompare(b.searchName, "es", { numeric: true }));
-  }, [term, mercadona.searchable]);
+      // Los que ya son favoritos van los primeros; dentro de cada grupo, el orden de siempre
+      .sort((a, b) =>
+        Number(favoriteIds.has(mercadonaNumericId(b.mercadonaId))) - Number(favoriteIds.has(mercadonaNumericId(a.mercadonaId)))
+        || score(a.searchName) - score(b.searchName)
+        || a.searchName.localeCompare(b.searchName, "es", { numeric: true }));
+  }, [term, mercadona.searchable, favorites]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
